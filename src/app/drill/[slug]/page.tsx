@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, use } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Brain, ArrowLeft, Flame, Trophy, ChevronRight,
-  Check, X, Zap, Star, RotateCcw, Home, Lightbulb
+  Check, X, Zap, Star, RotateCcw, Home, Lightbulb, Eye
 } from "lucide-react";
 import Link from "next/link";
 import { useDrillStore, type Question } from "@/store/drill-store";
@@ -30,7 +30,51 @@ function comboGrad(c: number) {
   return COMBO_BG[0];
 }
 
-type Phase = "loading" | "countdown" | "playing" | "answered" | "results";
+// ─── Stimulus helpers ─────────────────────────────────
+// Topics that need a stimulus shown before the question
+const STIMULUS_TOPICS = ["tachistoscope", "working-memory"];
+
+function needsStimulus(topicSlug: string): boolean {
+  return STIMULUS_TOPICS.includes(topicSlug);
+}
+
+// Tachistoscope: brief flash. Harder = shorter.
+function getTachistoscopeFlashMs(difficulty: number): number {
+  if (difficulty >= 4) return 150;
+  if (difficulty >= 3) return 250;
+  if (difficulty >= 2) return 400;
+  return 600; // easy
+}
+
+// Working Memory: show sequence for a duration. Harder = shorter.
+function getWorkingMemoryShowMs(difficulty: number): number {
+  if (difficulty >= 4) return 1500;
+  if (difficulty >= 3) return 2000;
+  if (difficulty >= 2) return 2500;
+  return 3000; // easy
+}
+
+// Get what to show as stimulus for a given question
+function getStimulusContent(q: Question, topicSlug: string): { text: string; items?: string[] } {
+  if (topicSlug === "tachistoscope") {
+    // The correct answer IS the word to flash
+    return { text: q.correctAnswer };
+  }
+  if (topicSlug === "working-memory") {
+    // The correct answer contains the sequence (e.g. "4-7-2" or "Kalem-Masa-Kitap")
+    const items = q.correctAnswer.split("-").map((s) => s.trim());
+    return { text: q.correctAnswer, items };
+  }
+  return { text: "" };
+}
+
+function getStimulusDurationMs(q: Question, topicSlug: string): number {
+  if (topicSlug === "tachistoscope") return getTachistoscopeFlashMs(q.difficulty);
+  if (topicSlug === "working-memory") return getWorkingMemoryShowMs(q.difficulty);
+  return 0;
+}
+
+type Phase = "loading" | "countdown" | "stimulus" | "stimulus-blank" | "playing" | "answered" | "results";
 
 export default function DrillPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -43,7 +87,10 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
   const [shaking, setShaking] = useState(false);
   const [, forceUpdate] = useState(0);
 
-  // All timing state in refs to avoid stale closures and circular deps
+  // Stimulus state
+  const [stimulusContent, setStimulusContent] = useState<{ text: string; items?: string[] } | null>(null);
+
+  // Refs
   const phaseRef = useRef<Phase>("loading");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
@@ -51,13 +98,11 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
   const slugRef = useRef(slug);
   slugRef.current = slug;
 
-  // Unified phase setter
   function goTo(p: Phase) {
     phaseRef.current = p;
     setPhase(p);
   }
 
-  // ─── Stop Timer ─────────────────────────────────────
   function stopTimer() {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -65,7 +110,6 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
     }
   }
 
-  // ─── Start Timer ────────────────────────────────────
   function startTimer(targetMs: number) {
     stopTimer();
     targetMsRef.current = targetMs;
@@ -73,18 +117,14 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
     setTimeLeft(targetMs);
 
     intervalRef.current = setInterval(() => {
-      // Only run while playing
       if (phaseRef.current !== "playing") return;
-
       const elapsed = Date.now() - startTimeRef.current;
       const remaining = Math.max(0, targetMsRef.current - elapsed);
       setTimeLeft(remaining);
 
       if (remaining <= 0) {
         stopTimer();
-        if (phaseRef.current !== "playing") return; // double-check
-
-        // Timeout — answer as wrong
+        if (phaseRef.current !== "playing") return;
         const q = useDrillStore.getState().currentQuestion;
         if (q) {
           useDrillStore.getState().answerQuestion("__timeout__", elapsed);
@@ -99,10 +139,44 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
     }, 50);
   }
 
-  // Cleanup on unmount
+  // ─── Show Stimulus then transition to playing ───────
+  function showStimulusThenPlay(q: Question) {
+    if (!needsStimulus(slug)) {
+      // Normal topics — go straight to playing
+      goTo("playing");
+      startTimer(q.targetTimeMs);
+      return;
+    }
+
+    const content = getStimulusContent(q, slug);
+    const durationMs = getStimulusDurationMs(q, slug);
+    setStimulusContent(content);
+    goTo("stimulus");
+
+    // After stimulus duration, show brief blank screen (for tachistoscope)
+    setTimeout(() => {
+      if (phaseRef.current !== "stimulus") return; // cancelled
+      if (slug === "tachistoscope") {
+        // Brief blank screen after flash (300ms)
+        goTo("stimulus-blank");
+        setTimeout(() => {
+          if (phaseRef.current !== "stimulus-blank") return;
+          setStimulusContent(null);
+          goTo("playing");
+          startTimer(q.targetTimeMs);
+        }, 300);
+      } else {
+        // Working memory — go straight to question
+        setStimulusContent(null);
+        goTo("playing");
+        startTimer(q.targetTimeMs);
+      }
+    }, durationMs);
+  }
+
   useEffect(() => () => stopTimer(), []);
 
-  // ─── Load Questions (runs once on mount) ────────────
+  // ─── Load Questions ─────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -111,11 +185,11 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
       stopTimer();
       setSelectedAnswer(null);
       setShaking(false);
+      setStimulusContent(null);
 
-      const [qRes, pbRes, tRes] = await Promise.all([
+      const [qRes, pbRes] = await Promise.all([
         fetch(`/api/questions?topic=${slug}&limit=10`),
         fetch(`/api/personal-bests?topic=${slug}`),
-        fetch("/api/topics"),
       ]);
 
       if (cancelled) return;
@@ -129,14 +203,11 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
       // 3-2-1 countdown
       setCountdownNum(3);
       goTo("countdown");
-
-      const firstTargetMs = questions[0].targetTimeMs;
       setTimeout(() => { if (!cancelled) setCountdownNum(2); }, 1000);
       setTimeout(() => { if (!cancelled) setCountdownNum(1); }, 2000);
       setTimeout(() => {
         if (cancelled) return;
-        goTo("playing");
-        startTimer(firstTargetMs);
+        showStimulusThenPlay(questions[0]);
       }, 3000);
     }
 
@@ -169,7 +240,6 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
       body: JSON.stringify({ questionId: q.id, topicSlug: slug, isCorrect, timeTakenMs: elapsed, comboCount: newCombo, xpEarned: earnedXp }),
     }).catch(() => {});
 
-    // Force re-render to pick up new store state
     forceUpdate((n) => n + 1);
   }
 
@@ -179,7 +249,6 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
     const nextIdx = s.questionIndex + 1;
 
     if (nextIdx >= s.questions.length) {
-      // Session over
       const totalTimeMs = Date.now() - s.startTime;
       fetch("/api/personal-bests", {
         method: "POST",
@@ -192,7 +261,6 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
       return;
     }
 
-    // Move to next
     setSelectedAnswer(null);
     setShaking(false);
     useDrillStore.getState().clearAnimation();
@@ -200,41 +268,33 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
 
     const nextQ = useDrillStore.getState().currentQuestion;
     if (nextQ) {
-      goTo("playing");
-      startTimer(nextQ.targetTimeMs);
+      showStimulusThenPlay(nextQ);
     }
     forceUpdate((n) => n + 1);
   }
 
   // ─── Replay ─────────────────────────────────────────
   function handleReplay() {
-    // Manually re-init — cannot retrigger the useEffect
     goTo("loading");
     stopTimer();
     setSelectedAnswer(null);
     setShaking(false);
+    setStimulusContent(null);
 
     (async () => {
       const [qRes, pbRes] = await Promise.all([
         fetch(`/api/questions?topic=${slug}&limit=10`),
         fetch(`/api/personal-bests?topic=${slug}`),
       ]);
-
       const questions: Question[] = await qRes.json();
       const pb = await pbRes.json();
       if (questions.length === 0) return;
-
       useDrillStore.getState().startDrill(questions, slug, pb);
-
       setCountdownNum(3);
       goTo("countdown");
-      const firstTargetMs = questions[0].targetTimeMs;
       setTimeout(() => setCountdownNum(2), 1000);
       setTimeout(() => setCountdownNum(1), 2000);
-      setTimeout(() => {
-        goTo("playing");
-        startTimer(firstTargetMs);
-      }, 3000);
+      setTimeout(() => showStimulusThenPlay(questions[0]), 3000);
       forceUpdate((n) => n + 1);
     })();
   }
@@ -247,7 +307,6 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
         return;
       }
       if (phaseRef.current !== "playing") return;
-
       const q = useDrillStore.getState().currentQuestion;
       if (!q) return;
       const map: Record<string, number> = { a: 0, b: 1, c: 2, d: 3, "1": 0, "2": 1, "3": 2, "4": 3 };
@@ -272,6 +331,78 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
             {countdownNum}
           </motion.div>
         </AnimatePresence>
+      </div>
+    );
+  }
+
+  // ─── Stimulus Phase (Tachistoscope flash / Working Memory display) ───
+  if (phase === "stimulus" && stimulusContent) {
+    const isTachy = slug === "tachistoscope";
+
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background gap-4">
+        {isTachy ? (
+          // TACHISTOSCOPE: Just the word, BIG, centered
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative"
+          >
+            {/* Glow effect behind word */}
+            <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
+            <h1 className="relative text-5xl md:text-7xl font-bold text-primary tracking-wide">
+              {stimulusContent.text}
+            </h1>
+          </motion.div>
+        ) : (
+          // WORKING MEMORY: Show items as cards
+          <div className="space-y-6 text-center">
+            <div className="flex items-center justify-center gap-2 text-muted-foreground">
+              <Eye className="w-5 h-5" />
+              <span className="text-sm font-medium">Ezberle!</span>
+            </div>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              {stimulusContent.items ? (
+                stimulusContent.items.map((item, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.15 }}
+                    className="glass-strong rounded-2xl px-6 py-4 min-w-[60px]"
+                  >
+                    <span className="text-2xl md:text-3xl font-bold text-primary">{item}</span>
+                  </motion.div>
+                ))
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="glass-strong rounded-2xl px-8 py-5"
+                >
+                  <span className="text-3xl font-bold text-primary">{stimulusContent.text}</span>
+                </motion.div>
+              )}
+            </div>
+            {/* Countdown bar for how long they have to memorize */}
+            <StimulusCountdownBar durationMs={getStimulusDurationMs(store.currentQuestion!, slug)} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Blank screen after tachistoscope flash
+  if (phase === "stimulus-blank") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-muted-foreground text-sm"
+        >
+          Ne gördün?
+        </motion.div>
       </div>
     );
   }
@@ -410,6 +541,34 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
       </div>
 
       {!isAns && <div className="pb-4 text-center"><p className="text-[10px] text-muted-foreground">Klavye: A, B, C, D veya 1, 2, 3, 4</p></div>}
+    </div>
+  );
+}
+
+// ─── Stimulus Countdown Bar (visual timer during memorization) ───
+function StimulusCountdownBar({ durationMs }: { durationMs: number }) {
+  const [pct, setPct] = useState(100);
+  const startRef = useRef(Date.now());
+
+  useEffect(() => {
+    startRef.current = Date.now();
+    const iv = setInterval(() => {
+      const elapsed = Date.now() - startRef.current;
+      const remaining = Math.max(0, 100 - (elapsed / durationMs) * 100);
+      setPct(remaining);
+      if (remaining <= 0) clearInterval(iv);
+    }, 30);
+    return () => clearInterval(iv);
+  }, [durationMs]);
+
+  return (
+    <div className="w-48 mx-auto mt-4">
+      <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+        <div
+          className="h-full rounded-full bg-primary/60 transition-[width] duration-75 ease-linear"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
