@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { getXpProgress, cn } from "@/lib/utils";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { StatsPanel } from "@/components/stats-panel";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   brain: Brain, pencil: Pencil, target: Target, search: Search,
@@ -37,6 +38,7 @@ export default function DashboardPage() {
   const [weakTopics, setWeakTopics] = useState<string[]>([]);
   const [recentHistory, setRecentHistory] = useState<{id: number, isCorrect: boolean, topicSlug: string}[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -256,6 +258,12 @@ export default function DashboardPage() {
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1">Son {chartData.length} sorunun hareketli ortalama doğruluğu</p>
               </div>
+              <button
+                onClick={() => setIsStatsOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-semibold"
+              >
+                <Target className="w-4 h-4" /> Detaylı Gelişim / Öneriler
+              </button>
             </div>
             <div className="h-[200px] w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -300,13 +308,20 @@ export default function DashboardPage() {
           delay={0.3}
         />
         <DrillSection
-          title="📖 Türkçe & Sözel"
+          title="📖 Çalışan Hafıza & Dikkat"
           topics={verbalTopics}
           stats={topicStats}
           weakTopics={weakTopics}
           delay={0.4}
         />
       </div>
+
+      <StatsPanel
+        isOpen={isStatsOpen}
+        onClose={() => setIsStatsOpen(false)}
+        stats={topicStats}
+        topics={topics}
+      />
     </main>
   );
 }

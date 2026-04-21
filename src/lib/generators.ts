@@ -91,6 +91,12 @@ function generateMathQuestion(slug: string, diff: number): Question {
   let timeMs = Math.max(3000, 15000 - (diff * 1000)); // gets faster, min 3s
   if (isMental) timeMs = Math.max(3000, timeMs * 0.7); // Mental math requires faster reaction
 
+  let tactic = "Kafanda okumak yerine tabloyu gözünde canlandır.";
+  if (op === "+") tactic = "Sayıları en yakın onluğa yuvarlayıp, artan/azalan kısmı sonradan ekle.";
+  if (op === "-") tactic = "Çıkarmayı toplama gibi düşün: Çıkan sayıya ne eklersem asıl sayıya ulaşırım?";
+  if (op === "*") tactic = "Önce onlukları çarp, sonra birlikleri çarpıp topla. Örn: 14x6 = (10x6) + (4x6).";
+  if (op === "/") tactic = "Şıklardan geriye doğru çarpmak her zaman bölmekten daha hızlıdır.";
+
   return {
     id: getNextId(),
     topicSlug: slug,
@@ -99,7 +105,7 @@ function generateMathQuestion(slug: string, diff: number): Question {
     options: shuffle(Array.from(options).map(String)),
     difficulty: diff,
     targetTimeMs: timeMs,
-    tacticHint: isMental && diff >= 4 ? "Sayıları içinden tekrar etme, zihinsel tabloya odaklan!" : null,
+    tacticHint: tactic,
   };
 }
 
@@ -142,7 +148,7 @@ function generateEstimationQuestion(slug: string, diff: number): Question {
     options: shuffle(Array.from(options)),
     difficulty: diff,
     targetTimeMs: Math.max(4000, 12000 - diff * 800),
-    tacticHint: "Küsüratları yuvarla. Zaman harcama!",
+    tacticHint: isSqrt ? "Büyük tam kareleri (12²=144, 15²=225) ezberle. En yakın olanı direkt işaretle!" : "Küsüratları direkt at, ana sayıları çarp ve şıklardaki ondalık sapmayı tahmin et.",
   };
 }
 
@@ -202,6 +208,11 @@ function generatePatternQuestion(slug: string, diff: number): Question {
     }
   }
 
+  let tactic = "Diziyi hızlıca tarayıp aradaki farkları (±) alt alta yaz.";
+  if (type === "geometric") tactic = "Katlanarak (çarpım) büyüyen bir seri. Başlangıç çarpanını bul!";
+  if (type === "fibonacci") tactic = "Kendinden önceki iki sayının toplamıyla ilerleyen bir dizi (Fibonacci karakterli).";
+  if (type === "mixed") tactic = "Tek ve çift sıradaki sayıları kendi aralarında ayrı ayrı incele (İki kural iç içe).";
+
   return {
     id: getNextId(),
     topicSlug: slug,
@@ -210,7 +221,7 @@ function generatePatternQuestion(slug: string, diff: number): Question {
     options: shuffle(Array.from(options).map(String)),
     difficulty: diff,
     targetTimeMs: Math.max(5000, 18000 - diff * 1200),
-    tacticHint: null,
+    tacticHint: tactic,
   };
 }
 
@@ -261,7 +272,7 @@ function generateVerbalMnemonicQuestion(slug: string, diff: number): Question {
       options: shuffle(Array.from(options)),
       difficulty: diff,
       targetTimeMs: 10000, // They have plenty of time to *answer*, the pressure is in the flash (handled in UI)
-      tacticHint: diff > 5 ? "Subvokalizasyonu engelle! Sadece şekil olarak tanı." : null,
+      tacticHint: "Kelimeleri içinden okuma (Subvokalizasyon)! Sadece şekillerine, ilk ve son harflerine bak.",
     };
   } else {
     // Working Memory
@@ -327,7 +338,7 @@ function generateVerbalMnemonicQuestion(slug: string, diff: number): Question {
       options: shuffle(Array.from(options)),
       difficulty: diff,
       targetTimeMs: Math.max(8000, 20000 - diff * 1500),
-      tacticHint: isReverse ? "Central Executive merkezini kullandın! Veriyi zihninde sondan başa dizmek hafıza alanını genişletir." : null,
+      tacticHint: isReverse ? "Central Executive'i kullandın! Tüm listeyi tekrarlamak yerine bloklar halinde zihninde kodla." : "Kelimeleri/Sayıları içinden defalarca saymak (Fonolojik Döngü) yerine görsel bir hikayeye bağla.",
     };
   }
 }
