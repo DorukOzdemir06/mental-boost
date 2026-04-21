@@ -15,6 +15,8 @@ import {
 import Link from "next/link";
 import { cn, formatMs } from "@/lib/utils";
 import { generateQuestion } from "@/lib/generators";
+import { sfx } from "@/lib/audio-engine";
+import { useThemeStore } from "@/store/theme-store";
 
 interface Question {
   id: number;
@@ -197,6 +199,7 @@ export default function WarmupPage() {
     const isCorrect = answer === actualCorrect;
 
     if (isCorrect) {
+      sfx.playSuccess();
       const newCombo = combo + 1;
       setCombo(newCombo);
       setMaxCombo(Math.max(maxCombo, newCombo));
@@ -204,6 +207,7 @@ export default function WarmupPage() {
       setTotalXp((v) => v + currentQ.difficulty * 5);
       setLastResult("correct");
     } else {
+      sfx.playError();
       setCombo(0);
       setTotalWrong((v) => v + 1);
       setLastResult("wrong");
@@ -462,12 +466,20 @@ export default function WarmupPage() {
           {phase === "answered" && lastResult && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-3">
               {lastResult === "correct" ? (
-                <span className="text-sm font-semibold text-success flex items-center gap-1">
-                  <Check className="w-4 h-4" /> Doğru!
+                <span className="text-sm font-semibold text-success flex items-center gap-1 uppercase tracking-widest">
+                  <Check className="w-4 h-4" />
+                  {useThemeStore.getState().theme === "bloodborne" ? "PREY SLAUGHTERED" : 
+                   useThemeStore.getState().theme === "ds3" ? "HEIR OF FIRE DESTROYED" : 
+                   useThemeStore.getState().theme === "gta5" || useThemeStore.getState().theme === "gtasa" ? "RESPECT +" : 
+                   useThemeStore.getState().theme === "arcade" ? "COMBO!" : "Doğru!"}
                 </span>
               ) : (
-                <span className="text-sm font-semibold text-destructive flex items-center gap-1">
-                  <X className="w-4 h-4" /> Yanlış
+                <span className="text-sm font-semibold text-destructive flex items-center gap-1 uppercase tracking-widest">
+                  <X className="w-4 h-4" />
+                  {useThemeStore.getState().theme === "bloodborne" ? "YOU DIED" : 
+                   useThemeStore.getState().theme === "ds3" ? "YOU DIED" : 
+                   useThemeStore.getState().theme === "gta5" || useThemeStore.getState().theme === "gtasa" ? "WASTED" : 
+                   useThemeStore.getState().theme === "arcade" ? "GAME OVER" : "Yanlış!"}
                 </span>
               )}
             </motion.div>

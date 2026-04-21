@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useDrillStore, type Question } from "@/store/drill-store";
+import { useThemeStore } from "@/store/theme-store";
+import { sfx } from "@/lib/audio-engine";
 import { cn, formatMs, getComboMultiplier } from "@/lib/utils";
 
 const COMBO_BG = [
@@ -305,7 +307,10 @@ export default function DrillPage({
 
     if (!isCorrect) {
       setShaking(true);
+      sfx.playError();
       setTimeout(() => setShaking(false), 400);
+    } else {
+      sfx.playSuccess();
     }
 
     fetch("/api/attempts", {
@@ -839,7 +844,12 @@ export default function DrillPage({
               {store.lastResult === "correct" ? (
                 <div className="flex items-center gap-2 text-emerald-400">
                   <Check className="w-5 h-5" />
-                  <span className="text-sm font-semibold">Doğru!</span>
+                  <span className="text-sm font-semibold">
+                    {useThemeStore.getState().theme === "bloodborne" ? "PREY SLAUGHTERED" : 
+                     useThemeStore.getState().theme === "ds3" ? "HEIR OF FIRE DESTROYED" : 
+                     useThemeStore.getState().theme === "gta5" || useThemeStore.getState().theme === "gtasa" ? "RESPECT +" : 
+                     useThemeStore.getState().theme === "arcade" ? "COMBO!" : "Doğru!"}
+                  </span>
                   {store.combo >= 2 && (
                     <motion.span
                       initial={{ scale: 0 }}
@@ -853,8 +863,13 @@ export default function DrillPage({
               ) : (
                 <div className="flex items-center gap-2 text-red-400">
                   <X className="w-5 h-5" />
-                  <span className="text-sm font-semibold">
-                    {selectedAnswer ? "Yanlış!" : "Süre Doldu!"}
+                  <span className="text-sm font-semibold tracking-widest uppercase">
+                    {selectedAnswer ? (
+                       useThemeStore.getState().theme === "bloodborne" ? "YOU DIED" : 
+                       useThemeStore.getState().theme === "ds3" ? "YOU DIED" : 
+                       useThemeStore.getState().theme === "gta5" || useThemeStore.getState().theme === "gtasa" ? "WASTED" : 
+                       useThemeStore.getState().theme === "arcade" ? "GAME OVER" : "Yanlış!"
+                    ) : "Süre Doldu!"}
                   </span>
                 </div>
               )}

@@ -19,6 +19,11 @@
   --radius: 0.75rem;
   --success: #10b981;
   --warning: #f59e0b;
+
+  --font-primary: var(--font-geist-sans);
+  --border-thickness: 1px;
+  --card-shadow: none;
+  --theme-cursor: default;
 }
 
 [data-theme="neo-tokyo"] {
@@ -37,6 +42,22 @@
   --destructive: #f43f5e;
   --border: #3b1666;
   --ring: #d946ef;
+  --radius: 0px;
+  --font-primary: var(--font-vt323), monospace;
+  --border-thickness: 2px;
+  --card-shadow: 0 0 15px rgba(217, 70, 239, 0.2);
+  --theme-cursor: crosshair;
+}
+
+[data-theme="neo-tokyo"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size: 100% 4px, 6px 100%;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.15;
 }
 
 [data-theme="arcade"] {
@@ -55,6 +76,21 @@
   --destructive: #ff0000;
   --border: #333333;
   --ring: #ffea00;
+  --radius: 0px;
+  --font-primary: var(--font-press-start), monospace;
+  --border-thickness: 4px;
+  --card-shadow: 8px 8px 0px var(--primary);
+  --theme-cursor: pointer;
+}
+
+[data-theme="arcade"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.3) 2px, rgba(0, 0, 0, 0.3) 4px);
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.3;
 }
 
 [data-theme="nord"] {
@@ -73,6 +109,11 @@
   --destructive: #bf616a;
   --border: #4c566a;
   --ring: #88c0d0;
+  --radius: 1rem;
+  --font-primary: var(--font-geist-sans);
+  --border-thickness: 1px;
+  --card-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  --theme-cursor: default;
 }
 
 [data-theme="crimson"] {
@@ -91,6 +132,11 @@
   --destructive: #b91c1c;
   --border: #450a0a;
   --ring: #dc2626;
+  --radius: 0.25rem;
+  --font-primary: var(--font-geist-sans);
+  --border-thickness: 2px;
+  --card-shadow: 0 0 40px rgba(220, 38, 38, 0.1);
+  --theme-cursor: crosshair;
 }
 
 [data-theme="bloodborne"] {
@@ -109,6 +155,22 @@
   --destructive: #5e0202;
   --border: #333333;
   --ring: #8a0303;
+  --radius: 0.1rem;
+  --font-primary: var(--font-cinzel), serif;
+  --border-thickness: 1px;
+  --card-shadow: inset 0 0 20px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.9);
+  --theme-cursor: crosshair;
+}
+
+[data-theme="bloodborne"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  box-shadow: inset 0 0 150px rgba(0,0,0,0.9);
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 50;
 }
 
 [data-theme="ds3"] {
@@ -127,6 +189,11 @@
   --destructive: #c0392b;
   --border: #404040;
   --ring: #d35400;
+  --radius: 0.3rem;
+  --font-primary: var(--font-cinzel), serif;
+  --border-thickness: 1px;
+  --card-shadow: 0 5px 25px rgba(211, 84, 0, 0.15);
+  --theme-cursor: default;
 }
 
 [data-theme="gta5"] {
@@ -143,8 +210,13 @@
   --accent: #3b82f6; /* Los Santos Blue */
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
-  --border: #475569;
+  --border: #000000;
   --ring: #22c55e;
+  --radius: 0px;
+  --font-primary: var(--font-oswald), sans-serif;
+  --border-thickness: 3px;
+  --card-shadow: 8px 8px 0px #000000;
+  --theme-cursor: crosshair;
 }
 
 [data-theme="gtasa"] {
@@ -161,8 +233,13 @@
   --accent: #ea580c; /* Orange Sunset */
   --accent-foreground: #ffffff;
   --destructive: #dc2626;
-  --border: #634633;
+  --border: #000000;
   --ring: #16a34a;
+  --radius: 0px;
+  --font-primary: var(--font-oswald), sans-serif;
+  --border-thickness: 3px;
+  --card-shadow: 6px 6px 0px #000000;
+  --theme-cursor: crosshair;
 }
 
 
@@ -184,20 +261,23 @@
   --color-ring: var(--ring);
   --color-success: var(--success);
   --color-warning: var(--warning);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-primary);
   --font-mono: var(--font-geist-mono);
 }
 
 * {
   border-color: var(--border);
+  border-width: var(--border-thickness);
+  cursor: var(--theme-cursor);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  font-family: var(--font-primary, system-ui, -apple-system, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  cursor: var(--theme-cursor);
 }
 
 /* ─── Scrollbar ──────────────────────────────────────── */
@@ -280,14 +360,18 @@ body {
   background: rgba(12, 12, 20, 0.7);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: var(--border-thickness) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
 }
 
 .glass-strong {
   background: rgba(12, 12, 20, 0.9);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: var(--border-thickness) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
 }
 
 /* ─── Progress Bar ───────────────────────────────────── */
