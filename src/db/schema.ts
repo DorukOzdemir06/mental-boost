@@ -39,7 +39,7 @@ export const questions = sqliteTable("questions", {
 // ─── Attempt Logs ────────────────────────────────────────
 export const attemptLogs = sqliteTable("attempt_logs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  questionId: integer("question_id").notNull().references(() => questions.id),
+  questionId: integer("question_id").notNull(),
   topicSlug: text("topic_slug").notNull(),
   isCorrect: integer("is_correct", { mode: "boolean" }).notNull(),
   timeTakenMs: integer("time_taken_ms").notNull(),
