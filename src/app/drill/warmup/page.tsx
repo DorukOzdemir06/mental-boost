@@ -248,12 +248,12 @@ export default function WarmupPage() {
   if (phase === "countdown") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background gap-4">
-        <div className="text-sm text-amber-400 font-medium mb-4">🔥 Isınma Modu</div>
+        <div className="text-sm text-accent font-medium mb-4">🔥 Isınma Modu</div>
         <motion.div
           key={countdown}
           initial={{ scale: 2, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="text-8xl font-bold text-amber-400"
+          className="text-8xl font-bold text-accent"
         >
           {countdown}
         </motion.div>
@@ -274,9 +274,9 @@ export default function WarmupPage() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: "spring" }}
-            className="inline-flex p-4 rounded-full bg-amber-500/20"
+            className="inline-flex p-4 rounded-full bg-accent/20"
           >
-            <Clock className="w-12 h-12 text-amber-400" />
+            <Clock className="w-12 h-12 text-accent" />
           </motion.div>
           <h2 className="text-2xl font-bold">Isınma Tamamlandı! 🔥</h2>
           <p className="text-sm text-muted-foreground">Beyinin ısındı, artık asıl antrenmanlara geçebilirsin!</p>
@@ -298,8 +298,8 @@ export default function WarmupPage() {
 
           {maxCombo >= 3 && (
             <div className="flex items-center justify-center gap-2">
-              <Flame className="w-5 h-5 text-orange-400" />
-              <span className="text-sm text-orange-400">En uzun seri: {maxCombo}</span>
+              <Flame className="w-5 h-5 text-accent" />
+              <span className="text-sm text-accent">En uzun seri: {maxCombo}</span>
             </div>
           )}
 
@@ -318,11 +318,11 @@ export default function WarmupPage() {
   const globalPercent = (globalTimeLeft / WARMUP_DURATION_MS) * 100;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-amber-950/30 to-background">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-primary/10 to-background">
       {/* Top bar */}
       <div className="p-4 flex items-center justify-between">
-        <Link href="/" className="p-2 rounded-lg hover:bg-white/5 transition-colors">
-          <Clock className="w-5 h-5 text-amber-400" />
+        <Link href="/" className="p-2 rounded-lg hover:bg-foreground/5 transition-colors">
+          <Clock className="w-5 h-5 text-accent" />
         </Link>
         <div className="flex items-center gap-3">
           {combo >= 2 && (
@@ -330,10 +330,10 @@ export default function WarmupPage() {
               key={combo}
               initial={{ scale: 0.5 }}
               animate={{ scale: 1 }}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/20"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/20"
             >
-              <Flame className="w-4 h-4 text-orange-400" />
-              <span className="text-sm font-bold text-orange-400">x{combo}</span>
+              <Flame className="w-4 h-4 text-accent" />
+              <span className="text-sm font-bold text-accent">x{combo}</span>
             </motion.div>
           )}
           <div className="text-xs text-muted-foreground px-2 py-1 rounded-full glass">
@@ -341,8 +341,8 @@ export default function WarmupPage() {
           </div>
         </div>
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg glass">
-          <Zap className="w-3.5 h-3.5 text-amber-400" />
-          <span className="text-xs font-medium text-amber-400">{totalXp} XP</span>
+          <Zap className="w-3.5 h-3.5 text-accent" />
+          <span className="text-xs font-medium text-accent">{totalXp} XP</span>
         </div>
       </div>
 
@@ -352,13 +352,13 @@ export default function WarmupPage() {
           <div
             className={cn(
               "h-full rounded-full transition-all duration-100",
-              globalPercent < 20 ? "progress-bar-danger" : "bg-gradient-to-r from-amber-500 to-orange-500",
+              globalPercent < 20 ? "progress-bar-danger" : "bg-gradient-to-r from-primary to-accent",
             )}
             style={{ width: `${globalPercent}%` }}
           />
         </div>
         <div className="flex justify-between mt-1">
-          <span className={cn("text-[10px] font-mono", globalPercent < 20 ? "text-destructive" : "text-amber-400")}>
+          <span className={cn("text-[10px] font-mono", globalPercent < 20 ? "text-destructive" : "text-accent")}>
             {formatMs(globalTimeLeft)}
           </span>
           <span className="text-[10px] text-muted-foreground">Isınma Modu</span>
@@ -370,7 +370,7 @@ export default function WarmupPage() {
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center">
             {phase === "stimulus-blank" ? (
-              <h2 className="text-5xl md:text-7xl font-mono tracking-widest text-[#1a1a2e]">
+              <h2 className="text-5xl md:text-7xl font-mono tracking-widest text-muted/30">
                 {"#".repeat(Math.max(5, stimulusContent.text.length))}
               </h2>
             ) : stimulusContent.items ? (
@@ -382,7 +382,7 @@ export default function WarmupPage() {
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ delay: i * 0.1, type: "spring", stiffness: 200 }}
-                    className="w-24 h-32 md:w-32 md:h-40 glass-strong rounded-2xl flex items-center justify-center text-3xl md:text-5xl font-bold bg-white/5"
+                    className="w-24 h-32 md:w-32 md:h-40 glass-strong rounded-2xl flex items-center justify-center text-3xl md:text-5xl font-bold bg-foreground/5"
                   >
                     {item}
                   </motion.div>
@@ -434,7 +434,7 @@ export default function WarmupPage() {
                       disabled={phase === "answered"}
                       onClick={() => handleAnswer(option)}
                       className={cn(
-                        "w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all glass hover:bg-white/5 active:scale-[0.98]",
+                        "w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all glass hover:bg-foreground/5 active:scale-[0.98]",
                         phase === "answered" && isCorrectOption && "!bg-success/20 !border-success/50",
                         phase === "answered" && isSelected && !isCorrectOption && "!bg-destructive/20 !border-destructive/50",
                         phase === "answered" && !isSelected && !isCorrectOption && "opacity-40",
@@ -490,7 +490,7 @@ export default function WarmupPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               onClick={handleNext}
-              className="mt-4 flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-colors font-medium text-sm"
+              className="mt-4 flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium text-sm"
             >
               Sonraki <ChevronRight className="w-4 h-4" />
             </motion.button>

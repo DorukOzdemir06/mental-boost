@@ -53,7 +53,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         >
           <button
             onClick={onClose}
-            className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+            className="absolute top-6 right-6 p-2 rounded-full bg-foreground/5 hover:bg-foreground/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>

@@ -93,9 +93,9 @@ export default function DashboardPage() {
     <main className="min-h-screen pb-12">
       {/* ─── Hero Header ────────────────────────────────── */}
       <header className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-950/50 via-background to-background" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-background" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-secondary/20 rounded-full blur-3xl" />
 
         <div className="relative max-w-6xl mx-auto px-6 pt-10 pb-8">
           <motion.div
@@ -132,10 +132,10 @@ export default function DashboardPage() {
               {/* Level */}
               <div className="glass rounded-2xl p-4 group card-hover">
                 <div className="flex items-center gap-2 mb-2">
-                  <Star className="w-4 h-4 text-yellow-400" />
+                  <Star className="w-4 h-4 text-accent" />
                   <span className="text-xs text-muted-foreground uppercase tracking-wider">Seviye</span>
                 </div>
-                <div className="text-2xl font-bold text-yellow-400">{xpInfo.level}</div>
+                <div className="text-2xl font-bold text-accent">{xpInfo.level}</div>
                 <div className="mt-2 h-1.5 rounded-full bg-secondary overflow-hidden">
                   <motion.div
                     className="h-full progress-bar rounded-full"
@@ -164,7 +164,7 @@ export default function DashboardPage() {
                   <TrendingUp className="w-4 h-4 text-success" />
                   <span className="text-xs text-muted-foreground uppercase tracking-wider">Doğruluk</span>
                 </div>
-                <div className="text-2xl font-bold" style={{ color: accuracy >= 70 ? "var(--success)" : accuracy >= 40 ? "var(--warning)" : "var(--destructive)" }}>
+                <div className="text-2xl font-bold text-success">
                   %{accuracy}
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">
@@ -175,14 +175,14 @@ export default function DashboardPage() {
               {/* Streak */}
               <div className="glass rounded-2xl p-4 card-hover">
                 <div className="flex items-center gap-2 mb-2">
-                  <Flame className="w-4 h-4 text-orange-400" />
+                  <Flame className="w-4 h-4 text-accent" />
                   <span className="text-xs text-muted-foreground uppercase tracking-wider">En Uzun Seri</span>
                 </div>
-                <div className="text-2xl font-bold text-orange-400">{user.longestStreak}</div>
+                <div className="text-2xl font-bold text-accent">{user.longestStreak}</div>
                 {user.streakShields > 0 && (
                   <div className="flex items-center gap-1 mt-1">
-                    <Shield className="w-3 h-3 text-blue-400" />
-                    <span className="text-[10px] text-blue-400">{user.streakShields} kalkan</span>
+                    <Shield className="w-3 h-3 text-accent" />
+                    <span className="text-[10px] text-accent">{user.streakShields} kalkan</span>
                   </div>
                 )}
               </div>
@@ -200,20 +200,20 @@ export default function DashboardPage() {
         >
           <Link href="/drill/warmup">
             <div className="glass rounded-2xl p-6 card-hover cursor-pointer group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-amber-600/10 to-orange-600/10 group-hover:from-amber-600/20 group-hover:to-orange-600/20 transition-all" />
+              <div className="absolute inset-0 bg-gradient-to-r from-accent/10 to-primary/10 group-hover:from-accent/20 group-hover:to-primary/20 transition-all" />
               <div className="relative flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-amber-500/20">
-                    <Clock className="w-6 h-6 text-amber-400" />
+                  <div className="p-3 rounded-xl bg-accent/20">
+                    <Clock className="w-6 h-6 text-accent" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-amber-400">🔥 Günlük Isınma — 3 Dakika</h3>
+                    <h3 className="text-lg font-semibold text-accent">🔥 Günlük Isınma — 3 Dakika</h3>
                     <p className="text-sm text-muted-foreground mt-0.5">
                       Beynini uyandır! Refleks açıcı karma pratik egzersiz.
                     </p>
                   </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-amber-400 transition-colors" />
+                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-accent transition-colors" />
               </div>
             </div>
           </Link>
@@ -289,7 +289,7 @@ export default function DashboardPage() {
                   <XAxis dataKey="name" hide />
                   <YAxis domain={[0, 100]} hide />
                   <Tooltip
-                    contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
+                    contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }}
                     itemStyle={{ color: "var(--primary)" }}
                     formatter={(value: unknown) => {
                       const num = typeof value === "number" ? value : Number(value);

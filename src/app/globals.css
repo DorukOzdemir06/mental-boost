@@ -23,6 +23,7 @@
   --font-primary: var(--font-geist-sans);
   --border-thickness: 1px;
   --card-shadow: none;
+  --glass-bg: rgba(12, 12, 20, 0.7);
   --theme-cursor: default;
 }
 
@@ -46,6 +47,7 @@
   --font-primary: var(--font-vt323), monospace;
   --border-thickness: 2px;
   --card-shadow: 0 0 15px rgba(217, 70, 239, 0.2);
+  --glass-bg: rgba(19, 7, 34, 0.7);
   --theme-cursor: crosshair;
 }
 
@@ -80,6 +82,7 @@
   --font-primary: var(--font-press-start), monospace;
   --border-thickness: 4px;
   --card-shadow: 8px 8px 0px var(--primary);
+  --glass-bg: rgba(20, 20, 20, 0.8);
   --theme-cursor: pointer;
 }
 
@@ -113,6 +116,7 @@
   --font-primary: var(--font-geist-sans);
   --border-thickness: 1px;
   --card-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  --glass-bg: rgba(59, 66, 82, 0.7);
   --theme-cursor: default;
 }
 
@@ -136,29 +140,31 @@
   --font-primary: var(--font-geist-sans);
   --border-thickness: 2px;
   --card-shadow: 0 0 40px rgba(220, 38, 38, 0.1);
+  --glass-bg: rgba(17, 0, 0, 0.7);
   --theme-cursor: crosshair;
 }
 
 [data-theme="bloodborne"] {
   --background: #111111;
-  --foreground: #c2c2c2;
-  --card: #1a1a1c;
-  --card-foreground: #d1d1d6;
-  --primary: #8a0303; /* Dried Blood */
-  --primary-foreground: #e0e0e0;
-  --secondary: #262626;
-  --secondary-foreground: #8a8a8a;
-  --muted: #1f1f22;
-  --muted-foreground: #5e5e5e;
-  --accent: #b08d57; /* Tarnished Gold */
+  --foreground: #e5e5e5;
+  --card: #202022;
+  --card-foreground: #f3f3f3;
+  --primary: #a30000; /* Dried Blood */
+  --primary-foreground: #ffffff;
+  --secondary: #333333;
+  --secondary-foreground: #aaaaaa;
+  --muted: #2a2a2c;
+  --muted-foreground: #777777;
+  --accent: #d4af37; /* Tarnished Gold */
   --accent-foreground: #111111;
-  --destructive: #5e0202;
-  --border: #333333;
-  --ring: #8a0303;
+  --destructive: #7a0000;
+  --border: #444444;
+  --ring: #a30000;
   --radius: 0.1rem;
   --font-primary: var(--font-cinzel), serif;
   --border-thickness: 1px;
-  --card-shadow: inset 0 0 20px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.9);
+  --card-shadow: 0 10px 40px rgba(0,0,0,0.9);
+  --glass-bg: rgba(32, 32, 34, 0.7);
   --theme-cursor: crosshair;
 }
 
@@ -193,20 +199,21 @@
   --font-primary: var(--font-cinzel), serif;
   --border-thickness: 1px;
   --card-shadow: 0 5px 25px rgba(211, 84, 0, 0.15);
+  --glass-bg: rgba(37, 37, 37, 0.7);
   --theme-cursor: default;
 }
 
 [data-theme="gta5"] {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --card: #1e293b;
-  --card-foreground: #f8fafc;
+  --background: #f1f5f9;
+  --foreground: #020617;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
   --primary: #22c55e; /* Vibrant Green */
-  --primary-foreground: #022c22;
-  --secondary: #334155;
-  --secondary-foreground: #94a3b8;
-  --muted: #475569;
-  --muted-foreground: #cbd5e1;
+  --primary-foreground: #ffffff;
+  --secondary: #e2e8f0;
+  --secondary-foreground: #334155;
+  --muted: #cbd5e1;
+  --muted-foreground: #475569;
   --accent: #3b82f6; /* Los Santos Blue */
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
@@ -216,6 +223,7 @@
   --font-primary: var(--font-oswald), sans-serif;
   --border-thickness: 3px;
   --card-shadow: 8px 8px 0px #000000;
+  --glass-bg: rgba(255, 255, 255, 0.8);
   --theme-cursor: crosshair;
 }
 
@@ -239,6 +247,7 @@
   --font-primary: var(--font-oswald), sans-serif;
   --border-thickness: 3px;
   --card-shadow: 6px 6px 0px #000000;
+  --glass-bg: rgba(59, 44, 36, 0.8);
   --theme-cursor: crosshair;
 }
 
@@ -267,8 +276,6 @@
 
 * {
   border-color: var(--border);
-  border-width: var(--border-thickness);
-  cursor: var(--theme-cursor);
 }
 
 body {
@@ -357,7 +364,7 @@ body {
 
 /* ─── Glass ──────────────────────────────────────────── */
 .glass {
-  background: rgba(12, 12, 20, 0.7);
+  background: var(--glass-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: var(--border-thickness) solid var(--border);
@@ -366,7 +373,7 @@ body {
 }
 
 .glass-strong {
-  background: rgba(12, 12, 20, 0.9);
+  background: var(--glass-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: var(--border-thickness) solid var(--border);
@@ -376,7 +383,7 @@ body {
 
 /* ─── Progress Bar ───────────────────────────────────── */
 .progress-bar {
-  background: linear-gradient(90deg, var(--primary), #a78bfa);
+  background: var(--primary);
   transition: width 0.3s ease-out;
 }
 
@@ -390,6 +397,6 @@ body {
 }
 .card-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(139, 92, 246, 0.15);
-  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  border-color: var(--primary);
 }

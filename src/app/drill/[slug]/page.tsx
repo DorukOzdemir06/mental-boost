@@ -24,13 +24,13 @@ import { sfx } from "@/lib/audio-engine";
 import { cn, formatMs, getComboMultiplier } from "@/lib/utils";
 
 const COMBO_BG = [
-  "from-slate-900 to-slate-800",
-  "from-blue-950 to-indigo-900",
-  "from-indigo-950 to-purple-900",
-  "from-purple-950 to-fuchsia-900",
-  "from-fuchsia-950 to-pink-900",
-  "from-pink-950 to-rose-900",
-  "from-rose-950 to-red-900",
+  "from-background to-background",
+  "from-primary/5 to-background",
+  "from-primary/10 to-background",
+  "from-primary/15 to-background",
+  "from-primary/20 to-background",
+  "from-primary/25 to-background",
+  "from-primary/30 to-background",
 ] as const;
 
 function comboGrad(c: number) {
@@ -583,8 +583,8 @@ export default function DrillPage({
           </div>
           {r.maxCombo >= 3 && (
             <div className="flex items-center justify-center gap-2">
-              <Flame className="w-5 h-5 text-orange-400" />
-              <span className="text-sm text-orange-400">
+              <Flame className="w-5 h-5 text-accent" />
+              <span className="text-sm text-accent">
                 En uzun seri: {r.maxCombo}
               </span>
             </div>
@@ -594,11 +594,11 @@ export default function DrillPage({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
-              className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30"
+              className="p-3 rounded-xl bg-accent/10 border border-accent/30"
             >
               <div className="flex items-center justify-center gap-2">
-                <Star className="w-5 h-5 text-yellow-400" />
-                <span className="text-sm font-semibold text-yellow-400">
+                <Star className="w-5 h-5 text-accent" />
+                <span className="text-sm font-semibold text-accent">
                   Yeni Rekor! 🎉
                 </span>
               </div>
@@ -644,7 +644,7 @@ export default function DrillPage({
       <div className="p-4 flex items-center justify-between">
         <Link
           href="/"
-          className="p-2 rounded-lg hover:bg-white/5 transition-colors"
+          className="p-2 rounded-lg hover:bg-foreground/5 transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-muted-foreground" />
         </Link>
@@ -662,10 +662,10 @@ export default function DrillPage({
                 initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0, opacity: 0 }}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/20"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/20"
               >
-                <Flame className="w-4 h-4 text-orange-400" />
-                <span className="text-sm font-bold text-orange-400">
+                <Flame className="w-4 h-4 text-accent" />
+                <span className="text-sm font-bold text-accent">
                   x{mult} Combo
                 </span>
               </motion.div>
@@ -778,7 +778,7 @@ export default function DrillPage({
                     disabled={isAns}
                     onClick={() => handleAnswer(opt)}
                     className={cn(
-                      "w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all cursor-pointer glass hover:bg-white/5 active:scale-[0.98]",
+                      "w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all cursor-pointer glass hover:bg-foreground/5 active:scale-[0.98]",
                       !isAns && "hover:border-primary/50",
                       isAns &&
                         isRight &&
@@ -821,10 +821,10 @@ export default function DrillPage({
               exit={{ opacity: 0 }}
               className="mt-4 w-full max-w-xl"
             >
-              <div className="glass rounded-xl p-4 border border-amber-500/30">
+              <div className="glass rounded-xl p-4 border border-accent/30">
                 <div className="flex items-start gap-2">
-                  <Lightbulb className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-300/90">
+                  <Lightbulb className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-accent/90">
                     {store.showTactic}
                   </p>
                 </div>
@@ -842,7 +842,7 @@ export default function DrillPage({
               className="mt-4"
             >
               {store.lastResult === "correct" ? (
-                <div className="flex items-center gap-2 text-emerald-400">
+                <div className="flex items-center gap-2 text-primary">
                   <Check className="w-5 h-5" />
                   <span className="text-sm font-semibold">
                     {useThemeStore.getState().theme === "bloodborne" ? "PREY SLAUGHTERED" : 
@@ -854,7 +854,7 @@ export default function DrillPage({
                     <motion.span
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
-                      className="text-xs text-orange-400"
+                      className="text-xs text-accent"
                     >
                       🔥 {store.combo} seri!
                     </motion.span>
