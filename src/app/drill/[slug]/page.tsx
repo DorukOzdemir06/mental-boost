@@ -1,285 +1,303 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, use } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Brain, ArrowLeft, Timer, Flame, Trophy, ChevronRight,
-  Check, X, Zap, Shield, Star, RotateCcw, Home, Lightbulb
+  Brain, ArrowLeft, Flame, Trophy, ChevronRight,
+  Check, X, Zap, Star, RotateCcw, Home, Lightbulb
 } from "lucide-react";
 import Link from "next/link";
 import { useDrillStore, type Question } from "@/store/drill-store";
-import { cn, formatMs, getComboGradient, getComboMultiplier, getXpProgress } from "@/lib/utils";
+import { cn, formatMs, getComboMultiplier } from "@/lib/utils";
+
+const COMBO_BG = [
+  "from-slate-900 to-slate-800",
+  "from-blue-950 to-indigo-900",
+  "from-indigo-950 to-purple-900",
+  "from-purple-950 to-fuchsia-900",
+  "from-fuchsia-950 to-pink-900",
+  "from-pink-950 to-rose-900",
+  "from-rose-950 to-red-900",
+] as const;
+
+function comboGrad(c: number) {
+  if (c >= 25) return COMBO_BG[6];
+  if (c >= 15) return COMBO_BG[5];
+  if (c >= 10) return COMBO_BG[4];
+  if (c >= 5)  return COMBO_BG[3];
+  if (c >= 3)  return COMBO_BG[2];
+  if (c >= 1)  return COMBO_BG[1];
+  return COMBO_BG[0];
+}
+
+type Phase = "loading" | "countdown" | "playing" | "answered" | "results";
 
 export default function DrillPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const store = useDrillStore();
-  const [loading, setLoading] = useState(true);
-  const [countdown, setCountdown] = useState<number | null>(null);
+
+  const [phase, setPhase] = useState<Phase>("loading");
+  const [countdownNum, setCountdownNum] = useState(3);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [answered, setAnswered] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [sessionComplete, setSessionComplete] = useState(false);
-  const [topicInfo, setTopicInfo] = useState<{ name: string; color: string } | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTimeRef = useRef<number>(0);
+  const [shaking, setShaking] = useState(false);
+  const [, forceUpdate] = useState(0);
 
-  // Load questions
-  const loadQuestions = useCallback(async () => {
-    setLoading(true);
-    setSessionComplete(false);
-    setAnswered(false);
-    setSelectedAnswer(null);
+  // All timing state in refs to avoid stale closures and circular deps
+  const phaseRef = useRef<Phase>("loading");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef(0);
+  const targetMsRef = useRef(0);
+  const slugRef = useRef(slug);
+  slugRef.current = slug;
 
-    const [questionsRes, pbRes, topicsRes] = await Promise.all([
-      fetch(`/api/questions?topic=${slug}&limit=10`),
-      fetch(`/api/personal-bests?topic=${slug}`),
-      fetch("/api/topics"),
-    ]);
+  // Unified phase setter
+  function goTo(p: Phase) {
+    phaseRef.current = p;
+    setPhase(p);
+  }
 
-    const questions: Question[] = await questionsRes.json();
-    const pb = await pbRes.json();
-    const allTopics = await topicsRes.json();
-    const topic = allTopics.find((t: { slug: string }) => t.slug === slug);
-    if (topic) setTopicInfo({ name: topic.name, color: topic.color });
-
-    if (questions.length === 0) {
-      setLoading(false);
-      return;
+  // ─── Stop Timer ─────────────────────────────────────
+  function stopTimer() {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
+  }
 
-    store.startDrill(questions, slug, pb);
-
-    // 3-2-1 countdown
-    setCountdown(3);
-    setTimeout(() => setCountdown(2), 1000);
-    setTimeout(() => setCountdown(1), 2000);
-    setTimeout(() => {
-      setCountdown(null);
-      setLoading(false);
-      startTimer(questions[0].targetTimeMs);
-    }, 3000);
-  }, [slug]);
-
-  useEffect(() => {
-    loadQuestions();
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [loadQuestions]);
-
-  // Timer
-  const startTimer = (targetMs: number) => {
-    setTimeLeft(targetMs);
+  // ─── Start Timer ────────────────────────────────────
+  function startTimer(targetMs: number) {
+    stopTimer();
+    targetMsRef.current = targetMs;
     startTimeRef.current = Date.now();
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
+    setTimeLeft(targetMs);
+
+    intervalRef.current = setInterval(() => {
+      // Only run while playing
+      if (phaseRef.current !== "playing") return;
+
       const elapsed = Date.now() - startTimeRef.current;
-      const remaining = Math.max(0, targetMs - elapsed);
+      const remaining = Math.max(0, targetMsRef.current - elapsed);
       setTimeLeft(remaining);
+
       if (remaining <= 0) {
-        clearInterval(timerRef.current!);
-        handleTimeout();
+        stopTimer();
+        if (phaseRef.current !== "playing") return; // double-check
+
+        // Timeout — answer as wrong
+        const q = useDrillStore.getState().currentQuestion;
+        if (q) {
+          useDrillStore.getState().answerQuestion("__timeout__", elapsed);
+          fetch("/api/attempts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ questionId: q.id, topicSlug: slugRef.current, isCorrect: false, timeTakenMs: elapsed, comboCount: 0, xpEarned: 0 }),
+          }).catch(() => {});
+        }
+        goTo("answered");
       }
     }, 50);
-  };
+  }
 
-  const handleTimeout = () => {
-    if (answered) return;
-    setAnswered(true);
-    const elapsed = Date.now() - startTimeRef.current;
-    store.answerQuestion("__timeout__", elapsed);
-    // Log attempt
-    logAttempt(store.currentQuestion!.id, false, elapsed, 0, 0);
-  };
+  // Cleanup on unmount
+  useEffect(() => () => stopTimer(), []);
 
-  // Answer
-  const handleAnswer = (answer: string) => {
-    if (answered || !store.currentQuestion) return;
-    setAnswered(true);
+  // ─── Load Questions (runs once on mount) ────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    async function init() {
+      goTo("loading");
+      stopTimer();
+      setSelectedAnswer(null);
+      setShaking(false);
+
+      const [qRes, pbRes, tRes] = await Promise.all([
+        fetch(`/api/questions?topic=${slug}&limit=10`),
+        fetch(`/api/personal-bests?topic=${slug}`),
+        fetch("/api/topics"),
+      ]);
+
+      if (cancelled) return;
+
+      const questions: Question[] = await qRes.json();
+      const pb = await pbRes.json();
+      if (questions.length === 0) return;
+
+      useDrillStore.getState().startDrill(questions, slug, pb);
+
+      // 3-2-1 countdown
+      setCountdownNum(3);
+      goTo("countdown");
+
+      const firstTargetMs = questions[0].targetTimeMs;
+      setTimeout(() => { if (!cancelled) setCountdownNum(2); }, 1000);
+      setTimeout(() => { if (!cancelled) setCountdownNum(1); }, 2000);
+      setTimeout(() => {
+        if (cancelled) return;
+        goTo("playing");
+        startTimer(firstTargetMs);
+      }, 3000);
+    }
+
+    init();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
+
+  // ─── Handle Answer ──────────────────────────────────
+  function handleAnswer(answer: string) {
+    if (phaseRef.current !== "playing") return;
+    const q = useDrillStore.getState().currentQuestion;
+    if (!q) return;
+
+    goTo("answered");
+    stopTimer();
     setSelectedAnswer(answer);
 
-    if (timerRef.current) clearInterval(timerRef.current);
     const elapsed = Date.now() - startTimeRef.current;
+    const { isCorrect, earnedXp, newCombo } = useDrillStore.getState().answerQuestion(answer, elapsed);
 
-    store.answerQuestion(answer, elapsed);
+    if (!isCorrect) {
+      setShaking(true);
+      setTimeout(() => setShaking(false), 400);
+    }
 
-    const isCorrect = answer === store.currentQuestion.correctAnswer;
-    const combo = isCorrect ? store.combo : 0; // updated in store already
-    const xp = isCorrect
-      ? Math.floor(
-          (store.currentQuestion.difficulty * 10 +
-            (elapsed < store.currentQuestion.targetTimeMs
-              ? Math.floor((1 - elapsed / store.currentQuestion.targetTimeMs) * 20)
-              : 0)) *
-          Math.min(1 + (store.combo - 1) * 0.1, 3)
-        )
-      : 0;
-
-    logAttempt(store.currentQuestion.id, isCorrect, elapsed, combo, xp);
-  };
-
-  const logAttempt = async (questionId: number, isCorrect: boolean, timeTakenMs: number, comboCount: number, xpEarned: number) => {
-    await fetch("/api/attempts", {
+    fetch("/api/attempts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        questionId,
-        topicSlug: slug,
-        isCorrect,
-        timeTakenMs,
-        comboCount,
-        xpEarned,
-      }),
-    });
-  };
+      body: JSON.stringify({ questionId: q.id, topicSlug: slug, isCorrect, timeTakenMs: elapsed, comboCount: newCombo, xpEarned: earnedXp }),
+    }).catch(() => {});
 
-  // Next question
-  const handleNext = () => {
-    setAnswered(false);
-    setSelectedAnswer(null);
-    store.clearAnimation();
+    // Force re-render to pick up new store state
+    forceUpdate((n) => n + 1);
+  }
 
-    const nextIndex = store.questionIndex + 1;
-    if (nextIndex >= store.questions.length) {
-      // Session complete
-      setSessionComplete(true);
-      // Update personal best
-      const totalTimeMs = Date.now() - (store.startTime || Date.now());
+  // ─── Handle Next ────────────────────────────────────
+  function handleNext() {
+    const s = useDrillStore.getState();
+    const nextIdx = s.questionIndex + 1;
+
+    if (nextIdx >= s.questions.length) {
+      // Session over
+      const totalTimeMs = Date.now() - s.startTime;
       fetch("/api/personal-bests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topicSlug: slug,
-          bestTimeMs: totalTimeMs,
-          bestStreak: store.maxCombo,
-          bestScore: store.score,
-        }),
-      });
-      store.endDrill();
+        body: JSON.stringify({ topicSlug: slug, bestTimeMs: totalTimeMs, bestStreak: s.maxCombo, bestScore: s.score }),
+      }).catch(() => {});
+      useDrillStore.getState().endDrill();
+      goTo("results");
+      forceUpdate((n) => n + 1);
       return;
     }
 
-    store.nextQuestion();
-    startTimer(store.questions[nextIndex].targetTimeMs);
-  };
+    // Move to next
+    setSelectedAnswer(null);
+    setShaking(false);
+    useDrillStore.getState().clearAnimation();
+    useDrillStore.getState().nextQuestion();
 
-  // Keyboard shortcuts
+    const nextQ = useDrillStore.getState().currentQuestion;
+    if (nextQ) {
+      goTo("playing");
+      startTimer(nextQ.targetTimeMs);
+    }
+    forceUpdate((n) => n + 1);
+  }
+
+  // ─── Replay ─────────────────────────────────────────
+  function handleReplay() {
+    // Manually re-init — cannot retrigger the useEffect
+    goTo("loading");
+    stopTimer();
+    setSelectedAnswer(null);
+    setShaking(false);
+
+    (async () => {
+      const [qRes, pbRes] = await Promise.all([
+        fetch(`/api/questions?topic=${slug}&limit=10`),
+        fetch(`/api/personal-bests?topic=${slug}`),
+      ]);
+
+      const questions: Question[] = await qRes.json();
+      const pb = await pbRes.json();
+      if (questions.length === 0) return;
+
+      useDrillStore.getState().startDrill(questions, slug, pb);
+
+      setCountdownNum(3);
+      goTo("countdown");
+      const firstTargetMs = questions[0].targetTimeMs;
+      setTimeout(() => setCountdownNum(2), 1000);
+      setTimeout(() => setCountdownNum(1), 2000);
+      setTimeout(() => {
+        goTo("playing");
+        startTimer(firstTargetMs);
+      }, 3000);
+      forceUpdate((n) => n + 1);
+    })();
+  }
+
+  // ─── Keyboard Shortcuts ─────────────────────────────
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (answered) {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleNext();
-        }
+    function onKey(e: KeyboardEvent) {
+      if (phaseRef.current === "answered") {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleNext(); }
         return;
       }
-      const q = store.currentQuestion;
+      if (phaseRef.current !== "playing") return;
+
+      const q = useDrillStore.getState().currentQuestion;
       if (!q) return;
+      const map: Record<string, number> = { a: 0, b: 1, c: 2, d: 3, "1": 0, "2": 1, "3": 2, "4": 3 };
+      const idx = map[e.key.toLowerCase()];
+      if (idx !== undefined && idx < q.options.length) handleAnswer(q.options[idx]);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
-      const keyMap: Record<string, number> = { a: 0, b: 1, c: 2, d: 3, "1": 0, "2": 1, "3": 2, "4": 3 };
-      const idx = keyMap[e.key.toLowerCase()];
-      if (idx !== undefined && idx < q.options.length) {
-        handleAnswer(q.options[idx]);
-      }
-    };
+  // ─── RENDER ─────────────────────────────────────────
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [answered, store.currentQuestion]);
+  if (phase === "loading") {
+    return <div className="flex items-center justify-center min-h-screen bg-background"><Brain className="w-12 h-12 text-primary animate-pulse" /></div>;
+  }
 
-  // ─── Loading / Countdown ────────────────────────────
-  if (countdown !== null) {
+  if (phase === "countdown") {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
-        <motion.div
-          key={countdown}
-          initial={{ scale: 2, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0, opacity: 0 }}
-          className="text-8xl font-bold text-primary"
-        >
-          {countdown}
-        </motion.div>
+        <AnimatePresence mode="wait">
+          <motion.div key={countdownNum} initial={{ scale: 2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} transition={{ duration: 0.3 }} className="text-8xl font-bold text-primary">
+            {countdownNum}
+          </motion.div>
+        </AnimatePresence>
       </div>
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Brain className="w-12 h-12 text-primary animate-pulse" />
-      </div>
-    );
-  }
+  if (phase === "results") {
+    const r = store.savedResults;
+    if (!r) return null;
+    const newRecord = r.personalBest && r.score > r.personalBest.bestScore;
 
-  // ─── Session Complete ───────────────────────────────
-  if (sessionComplete) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="glass-strong rounded-3xl p-8 max-w-md w-full text-center space-y-6"
-        >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring" }}
-            className="inline-flex p-4 rounded-full bg-primary/20"
-          >
+      <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="glass-strong rounded-3xl p-8 max-w-md w-full text-center space-y-6">
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2, type: "spring" }} className="inline-flex p-4 rounded-full bg-primary/20">
             <Trophy className="w-12 h-12 text-primary" />
           </motion.div>
           <h2 className="text-2xl font-bold">Antrenman Tamamlandı!</h2>
           <div className="grid grid-cols-3 gap-4">
-            <div className="glass rounded-xl p-3">
-              <div className="text-xl font-bold text-success">{store.correctCount}</div>
-              <div className="text-[10px] text-muted-foreground">Doğru</div>
-            </div>
-            <div className="glass rounded-xl p-3">
-              <div className="text-xl font-bold text-destructive">{store.wrongCount}</div>
-              <div className="text-[10px] text-muted-foreground">Yanlış</div>
-            </div>
-            <div className="glass rounded-xl p-3">
-              <div className="text-xl font-bold text-primary">{store.xpEarned}</div>
-              <div className="text-[10px] text-muted-foreground">XP</div>
-            </div>
+            <div className="glass rounded-xl p-3"><div className="text-xl font-bold text-emerald-400">{r.correctCount}</div><div className="text-[10px] text-muted-foreground">Doğru</div></div>
+            <div className="glass rounded-xl p-3"><div className="text-xl font-bold text-red-400">{r.wrongCount}</div><div className="text-[10px] text-muted-foreground">Yanlış</div></div>
+            <div className="glass rounded-xl p-3"><div className="text-xl font-bold text-primary">{r.xpEarned}</div><div className="text-[10px] text-muted-foreground">XP</div></div>
           </div>
-
-          {store.maxCombo >= 3 && (
-            <div className="flex items-center justify-center gap-2">
-              <Flame className="w-5 h-5 text-orange-400" />
-              <span className="text-sm text-orange-400">En uzun seri: {store.maxCombo}</span>
-            </div>
-          )}
-
-          {store.personalBest && store.score > store.personalBest.bestScore && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Star className="w-5 h-5 text-yellow-400" />
-                <span className="text-sm font-semibold text-yellow-400">Yeni Rekor! 🎉</span>
-              </div>
-            </motion.div>
-          )}
-
+          {r.maxCombo >= 3 && <div className="flex items-center justify-center gap-2"><Flame className="w-5 h-5 text-orange-400" /><span className="text-sm text-orange-400">En uzun seri: {r.maxCombo}</span></div>}
+          {newRecord && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30"><div className="flex items-center justify-center gap-2"><Star className="w-5 h-5 text-yellow-400" /><span className="text-sm font-semibold text-yellow-400">Yeni Rekor! 🎉</span></div></motion.div>}
           <div className="flex gap-3 pt-2">
-            <Link href="/" className="flex-1">
-              <button className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors text-sm font-medium">
-                <Home className="w-4 h-4" />
-                Ana Sayfa
-              </button>
-            </Link>
-            <button
-              onClick={loadQuestions}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Tekrar Oyna
-            </button>
+            <Link href="/" className="flex-1"><button className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors text-sm font-medium"><Home className="w-4 h-4" /> Ana Sayfa</button></Link>
+            <button onClick={handleReplay} className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"><RotateCcw className="w-4 h-4" /> Tekrar Oyna</button>
           </div>
         </motion.div>
       </div>
@@ -290,130 +308,72 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
   const q = store.currentQuestion;
   if (!q) return null;
 
-  const targetMs = q.targetTimeMs;
-  const timePercent = (timeLeft / targetMs) * 100;
-  const isDanger = timePercent < 25;
-  const comboMultiplier = getComboMultiplier(store.combo);
+  const isAns = phase === "answered";
+  const tMs = q.targetTimeMs;
+  const pct = Math.min(100, Math.max(0, (timeLeft / tMs) * 100));
+  const danger = pct < 25;
+  const mult = getComboMultiplier(store.combo);
 
   return (
-    <div
-      className={cn(
-        "min-h-screen flex flex-col transition-all duration-500",
-        `bg-gradient-to-b ${getComboGradient(store.combo)}`,
-        store.shakeScreen && "animate-shake"
-      )}
-    >
-      {/* Top Bar */}
+    <div className={cn("min-h-screen flex flex-col transition-all duration-500 bg-gradient-to-b", comboGrad(store.combo), shaking && "animate-shake")}>
+      {/* Top bar */}
       <div className="p-4 flex items-center justify-between">
-        <Link href="/" className="p-2 rounded-lg hover:bg-white/5 transition-colors">
-          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-        </Link>
+        <Link href="/" className="p-2 rounded-lg hover:bg-white/5 transition-colors"><ArrowLeft className="w-5 h-5 text-muted-foreground" /></Link>
         <div className="flex items-center gap-3">
-          {/* Combo */}
-          {store.combo >= 2 && (
-            <motion.div
-              key={store.combo}
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/20"
-            >
-              <Flame className="w-4 h-4 text-orange-400" />
-              <span className="text-sm font-bold text-orange-400">
-                x{comboMultiplier} Combo
-              </span>
-            </motion.div>
-          )}
-          {/* Progress */}
-          <div className="text-xs text-muted-foreground px-2 py-1 rounded-full glass">
-            {store.questionIndex + 1}/{store.totalQuestions}
-          </div>
+          <AnimatePresence>
+            {store.combo >= 2 && (
+              <motion.div key={`c${store.combo}`} initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/20">
+                <Flame className="w-4 h-4 text-orange-400" /><span className="text-sm font-bold text-orange-400">x{mult} Combo</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <div className="text-xs text-muted-foreground px-2 py-1 rounded-full glass">{store.questionIndex + 1}/{store.totalQuestions}</div>
         </div>
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg glass">
-          <Zap className="w-3.5 h-3.5 text-primary" />
-          <span className="text-xs font-medium text-primary">{store.score} XP</span>
-        </div>
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg glass"><Zap className="w-3.5 h-3.5 text-primary" /><span className="text-xs font-medium text-primary">{store.score} XP</span></div>
       </div>
 
-      {/* Timer Bar */}
+      {/* Timer */}
       <div className="px-4">
         <div className="h-2 rounded-full bg-secondary overflow-hidden">
-          <motion.div
-            className={cn("h-full rounded-full", isDanger ? "progress-bar-danger" : "progress-bar")}
-            style={{ width: `${timePercent}%` }}
-            transition={{ duration: 0.05 }}
-          />
+          <div className={cn("h-full rounded-full transition-[width] duration-100 ease-linear", danger ? "progress-bar-danger" : "progress-bar")} style={{ width: `${pct}%` }} />
         </div>
         <div className="flex justify-between mt-1">
-          <span className={cn("text-[10px] font-mono", isDanger ? "text-destructive animate-countdown-pulse" : "text-muted-foreground")}>
-            {formatMs(timeLeft)}
-          </span>
-          <span className="text-[10px] text-muted-foreground font-mono">
-            Hedef: {formatMs(targetMs)}
-          </span>
+          <span className={cn("text-[10px] font-mono", danger ? "text-red-400 animate-countdown-pulse" : "text-muted-foreground")}>{formatMs(timeLeft)}</span>
+          <span className="text-[10px] text-muted-foreground font-mono">Hedef: {formatMs(tMs)}</span>
         </div>
       </div>
 
-      {/* Personal Best Ghost */}
-      {store.personalBest && store.personalBest.bestScore > 0 && !answered && (
-        <div className="px-4 mt-2">
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            <Trophy className="w-3 h-3" />
-            <span>Önceki rekorun: {store.personalBest.bestScore} XP | En uzun seri: {store.personalBest.bestStreak}</span>
-          </div>
-        </div>
+      {/* Ghost PB */}
+      {store.personalBest && store.personalBest.bestScore > 0 && !isAns && (
+        <div className="px-4 mt-2"><div className="flex items-center gap-2 text-[10px] text-muted-foreground"><Trophy className="w-3 h-3" /><span>Rekorun: {store.personalBest.bestScore} XP | Seri: {store.personalBest.bestStreak}</span></div></div>
       )}
 
-      {/* Question */}
+      {/* Question & Options */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={store.questionIndex}
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -30 }}
-            className="w-full max-w-xl space-y-6"
-          >
-            {/* Question Text */}
-            <div className="glass-strong rounded-2xl p-6">
-              <p className="text-lg font-medium leading-relaxed whitespace-pre-line">{q.content}</p>
-            </div>
-
-            {/* Options */}
+          <motion.div key={store.questionIndex} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.2 }} className="w-full max-w-xl space-y-6">
+            <div className="glass-strong rounded-2xl p-6"><p className="text-lg font-medium leading-relaxed whitespace-pre-line">{q.content}</p></div>
             <div className="grid grid-cols-1 gap-2.5">
-              {q.options.map((option, i) => {
+              {q.options.map((opt, i) => {
                 const letter = ["A", "B", "C", "D"][i];
-                const isCorrectOption = option === q.correctAnswer;
-                const isSelected = selectedAnswer === option;
-                const showResult = answered;
-
+                const isRight = opt === q.correctAnswer;
+                const isSel = selectedAnswer === opt;
                 return (
-                  <motion.button
-                    key={i}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    disabled={answered}
-                    onClick={() => handleAnswer(option)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all",
-                      "glass hover:bg-white/5 active:scale-[0.98]",
-                      !answered && "hover:border-primary/50",
-                      showResult && isCorrectOption && "!bg-success/20 !border-success/50",
-                      showResult && isSelected && !isCorrectOption && "!bg-destructive/20 !border-destructive/50",
-                      answered && !isSelected && !isCorrectOption && "opacity-40"
-                    )}
-                  >
-                    <span className={cn(
-                      "w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold flex-shrink-0",
-                      "bg-white/5",
-                      showResult && isCorrectOption && "!bg-success text-white",
-                      showResult && isSelected && !isCorrectOption && "!bg-destructive text-white"
+                  <motion.button key={`${store.questionIndex}-${i}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                    disabled={isAns} onClick={() => handleAnswer(opt)}
+                    className={cn("w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all cursor-pointer glass hover:bg-white/5 active:scale-[0.98]",
+                      !isAns && "hover:border-primary/50",
+                      isAns && isRight && "!bg-emerald-500/20 !border-emerald-500/50",
+                      isAns && isSel && !isRight && "!bg-red-500/20 !border-red-500/50",
+                      isAns && !isSel && !isRight && "opacity-40"
                     )}>
-                      {showResult && isCorrectOption ? <Check className="w-4 h-4" /> :
-                       showResult && isSelected && !isCorrectOption ? <X className="w-4 h-4" /> :
-                       letter}
+                    <span className={cn("w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold flex-shrink-0 bg-white/5",
+                      isAns && isRight && "!bg-emerald-500 text-white",
+                      isAns && isSel && !isRight && "!bg-red-500 text-white"
+                    )}>
+                      {isAns && isRight ? <Check className="w-4 h-4" /> : isAns && isSel && !isRight ? <X className="w-4 h-4" /> : letter}
                     </span>
-                    <span className="text-sm font-medium">{option}</span>
+                    <span className="text-sm font-medium">{opt}</span>
                   </motion.button>
                 );
               })}
@@ -421,80 +381,35 @@ export default function DrillPage({ params }: { params: Promise<{ slug: string }
           </motion.div>
         </AnimatePresence>
 
-        {/* Tac Hint */}
         <AnimatePresence>
-          {answered && store.showTactic && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="mt-4 w-full max-w-xl"
-            >
-              <div className="glass rounded-xl p-4 border border-amber-500/30">
-                <div className="flex items-start gap-2">
-                  <Lightbulb className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-300/90">{store.showTactic}</p>
-                </div>
-              </div>
+          {isAns && store.showTactic && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-4 w-full max-w-xl">
+              <div className="glass rounded-xl p-4 border border-amber-500/30"><div className="flex items-start gap-2"><Lightbulb className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" /><p className="text-xs text-amber-300/90">{store.showTactic}</p></div></div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Correct/Wrong Flash */}
         <AnimatePresence>
-          {answered && store.lastResult && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="mt-4"
-            >
+          {isAns && store.lastResult && (
+            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="mt-4">
               {store.lastResult === "correct" ? (
-                <div className="flex items-center gap-2 text-success">
-                  <Check className="w-5 h-5" />
-                  <span className="text-sm font-semibold">Doğru!</span>
-                  {store.combo >= 2 && (
-                    <motion.span
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="text-xs text-orange-400"
-                    >
-                      🔥 {store.combo} seri!
-                    </motion.span>
-                  )}
-                </div>
+                <div className="flex items-center gap-2 text-emerald-400"><Check className="w-5 h-5" /><span className="text-sm font-semibold">Doğru!</span>{store.combo >= 2 && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-xs text-orange-400">🔥 {store.combo} seri!</motion.span>}</div>
               ) : (
-                <div className="flex items-center gap-2 text-destructive">
-                  <X className="w-5 h-5" />
-                  <span className="text-sm font-semibold">Yanlış!</span>
-                </div>
+                <div className="flex items-center gap-2 text-red-400"><X className="w-5 h-5" /><span className="text-sm font-semibold">{selectedAnswer ? "Yanlış!" : "Süre Doldu!"}</span></div>
               )}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Next Button */}
-        {answered && (
-          <motion.button
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            onClick={handleNext}
-            className="mt-6 flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium text-sm"
-          >
-            {store.questionIndex + 1 >= store.totalQuestions ? "Sonuçlar" : "Sonraki Soru"}
-            <ChevronRight className="w-4 h-4" />
+        {isAns && (
+          <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onClick={handleNext}
+            className="mt-6 flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium text-sm">
+            {store.questionIndex + 1 >= store.totalQuestions ? "Sonuçlar" : "Sonraki Soru"} <ChevronRight className="w-4 h-4" />
           </motion.button>
         )}
       </div>
 
-      {/* Footer hint */}
-      {!answered && (
-        <div className="pb-4 text-center">
-          <p className="text-[10px] text-muted-foreground">
-            Klavye: A, B, C, D veya 1, 2, 3, 4
-          </p>
-        </div>
-      )}
+      {!isAns && <div className="pb-4 text-center"><p className="text-[10px] text-muted-foreground">Klavye: A, B, C, D veya 1, 2, 3, 4</p></div>}
     </div>
   );
 }

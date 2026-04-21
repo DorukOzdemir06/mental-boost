@@ -60,8 +60,9 @@ export function getComboMultiplier(combo: number): number {
 
 // ─── Time Formatting ────────────────────────────────────
 export function formatMs(ms: number): string {
+  if (ms <= 0) return "0.0s";
   const seconds = ms / 1000;
-  if (seconds < 1) return `${ms}ms`;
+  if (seconds < 1) return `${Math.round(ms)}ms`;
   return `${seconds.toFixed(1)}s`;
 }
 

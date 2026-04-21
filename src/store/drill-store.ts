@@ -13,6 +13,15 @@ export interface Question {
   tacticHint: string | null;
 }
 
+export interface SessionResults {
+  correctCount: number;
+  wrongCount: number;
+  xpEarned: number;
+  maxCombo: number;
+  score: number;
+  personalBest: { bestTimeMs: number; bestStreak: number; bestScore: number } | null;
+}
+
 export interface DrillState {
   // Session
   isActive: boolean;
@@ -39,13 +48,15 @@ export interface DrillState {
   // Personal Best
   personalBest: { bestTimeMs: number; bestStreak: number; bestScore: number } | null;
 
+  // Saved results (persisted after endDrill so results screen can read them)
+  savedResults: SessionResults | null;
+
   // Actions
   startDrill: (questions: Question[], topicSlug: string, pb: DrillState["personalBest"]) => void;
-  answerQuestion: (answer: string, timeTakenMs: number) => void;
+  answerQuestion: (answer: string, timeTakenMs: number) => { isCorrect: boolean; earnedXp: number; newCombo: number };
   nextQuestion: () => void;
   endDrill: () => void;
   clearAnimation: () => void;
-  setShakeScreen: (value: boolean) => void;
 }
 
 export const useDrillStore = create<DrillState>((set, get) => ({
@@ -66,6 +77,7 @@ export const useDrillStore = create<DrillState>((set, get) => ({
   showTactic: null,
   shakeScreen: false,
   personalBest: null,
+  savedResults: null,
 
   startDrill: (questions, topicSlug, pb) => {
     set({
@@ -86,16 +98,18 @@ export const useDrillStore = create<DrillState>((set, get) => ({
       showTactic: null,
       shakeScreen: false,
       personalBest: pb,
+      savedResults: null,
     });
   },
 
   answerQuestion: (answer, timeTakenMs) => {
     const state = get();
     const q = state.currentQuestion;
-    if (!q) return;
+    if (!q) return { isCorrect: false, earnedXp: 0, newCombo: 0 };
 
     const isCorrect = answer === q.correctAnswer;
     const newCombo = isCorrect ? state.combo + 1 : 0;
+    // Use the CURRENT combo (before increment) for multiplier calculation
     const comboMultiplier = isCorrect ? Math.min(1 + state.combo * 0.1, 3) : 1;
     const baseXp = isCorrect ? q.difficulty * 10 : 0;
     const timeBonus = isCorrect && timeTakenMs < q.targetTimeMs ? Math.floor((1 - timeTakenMs / q.targetTimeMs) * 20) : 0;
@@ -114,6 +128,8 @@ export const useDrillStore = create<DrillState>((set, get) => ({
       showTactic,
       shakeScreen: !isCorrect,
     });
+
+    return { isCorrect, earnedXp, newCombo };
   },
 
   nextQuestion: () => {
@@ -133,7 +149,17 @@ export const useDrillStore = create<DrillState>((set, get) => ({
   },
 
   endDrill: () => {
+    const state = get();
+    // Save results BEFORE clearing state
     set({
+      savedResults: {
+        correctCount: state.correctCount,
+        wrongCount: state.wrongCount,
+        xpEarned: state.xpEarned,
+        maxCombo: state.maxCombo,
+        score: state.score,
+        personalBest: state.personalBest,
+      },
       isActive: false,
       currentQuestion: null,
       lastResult: null,
@@ -145,6 +171,4 @@ export const useDrillStore = create<DrillState>((set, get) => ({
   clearAnimation: () => {
     set({ lastResult: null, showTactic: null, shakeScreen: false });
   },
-
-  setShakeScreen: (value) => set({ shakeScreen: value }),
 }));
