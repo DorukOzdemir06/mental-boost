@@ -1,65 +1,340 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Brain, Pencil, Target, Search, Zap, ScanSearch, Table2, Database,
+  Trophy, Flame, Star, ChevronRight, TrendingUp, Shield, Clock,
+  BarChart3, Sparkles
+} from "lucide-react";
+import Link from "next/link";
+import { getXpProgress, cn } from "@/lib/utils";
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  brain: Brain, pencil: Pencil, target: Target, search: Search,
+  zap: Zap, "scan-search": ScanSearch, "table-2": Table2, database: Database,
+};
+
+interface Topic {
+  id: number; slug: string; name: string; description: string;
+  icon: string; color: string; category: string;
+}
+
+interface UserData {
+  xp: number; currentLevel: number; longestStreak: number;
+  totalCorrect: number; totalAttempts: number; streakShields: number;
+}
+
+interface TopicStat {
+  topicSlug: string; totalAttempts: number; correctCount: number; avgTimeMs: number;
+}
+
+export default function DashboardPage() {
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [user, setUser] = useState<UserData | null>(null);
+  const [topicStats, setTopicStats] = useState<TopicStat[]>([]);
+  const [weakTopics, setWeakTopics] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/topics").then((r) => r.json()),
+      fetch("/api/attempts?type=user").then((r) => r.json()),
+      fetch("/api/attempts?type=topic-stats").then((r) => r.json()),
+      fetch("/api/attempts?type=weakness").then((r) => r.json()),
+    ]).then(([t, u, s, w]) => {
+      setTopics(t);
+      setUser(u);
+      setTopicStats(s);
+      setWeakTopics(w.map((x: { topicSlug: string }) => x.topicSlug));
+      setLoaded(true);
+    });
+  }, []);
+
+  const xpInfo = user ? getXpProgress(user.xp) : null;
+  const accuracy = user && user.totalAttempts > 0
+    ? Math.round((user.totalCorrect / user.totalAttempts) * 100)
+    : 0;
+
+  const mathTopics = topics.filter((t) => t.category === "math");
+  const verbalTopics = topics.filter((t) => t.category === "verbal");
+
+  const getStatForTopic = (slug: string) => topicStats.find((s) => s.topicSlug === slug);
+
+  if (!loaded) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+        >
+          <Brain className="w-12 h-12 text-primary" />
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="min-h-screen pb-12">
+      {/* ─── Hero Header ────────────────────────────────── */}
+      <header className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-950/50 via-background to-background" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl" />
+
+        <div className="relative max-w-6xl mx-auto px-6 pt-10 pb-8">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 mb-6"
+          >
+            <div className="p-2.5 rounded-xl bg-primary/20 animate-pulse-glow">
+              <Brain className="w-7 h-7 text-primary" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Mental <span className="text-primary">Boost</span>
+            </h1>
+          </motion.div>
+
+          {/* Stats Bar */}
+          {user && xpInfo && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="grid grid-cols-2 md:grid-cols-4 gap-3"
+            >
+              {/* Level */}
+              <div className="glass rounded-2xl p-4 group card-hover">
+                <div className="flex items-center gap-2 mb-2">
+                  <Star className="w-4 h-4 text-yellow-400" />
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Seviye</span>
+                </div>
+                <div className="text-2xl font-bold text-yellow-400">{xpInfo.level}</div>
+                <div className="mt-2 h-1.5 rounded-full bg-secondary overflow-hidden">
+                  <motion.div
+                    className="h-full progress-bar rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${xpInfo.progress * 100}%` }}
+                    transition={{ duration: 1, delay: 0.5 }}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {xpInfo.currentLevelXp} / {xpInfo.nextLevelXp} XP
+                </p>
+              </div>
+
+              {/* XP */}
+              <div className="glass rounded-2xl p-4 card-hover">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Toplam XP</span>
+                </div>
+                <div className="text-2xl font-bold text-primary">{user.xp.toLocaleString()}</div>
+              </div>
+
+              {/* Accuracy */}
+              <div className="glass rounded-2xl p-4 card-hover">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="w-4 h-4 text-success" />
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Doğruluk</span>
+                </div>
+                <div className="text-2xl font-bold" style={{ color: accuracy >= 70 ? "var(--success)" : accuracy >= 40 ? "var(--warning)" : "var(--destructive)" }}>
+                  %{accuracy}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {user.totalCorrect}/{user.totalAttempts} soru
+                </p>
+              </div>
+
+              {/* Streak */}
+              <div className="glass rounded-2xl p-4 card-hover">
+                <div className="flex items-center gap-2 mb-2">
+                  <Flame className="w-4 h-4 text-orange-400" />
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">En Uzun Seri</span>
+                </div>
+                <div className="text-2xl font-bold text-orange-400">{user.longestStreak}</div>
+                {user.streakShields > 0 && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <Shield className="w-3 h-3 text-blue-400" />
+                    <span className="text-[10px] text-blue-400">{user.streakShields} kalkan</span>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </header>
+
+      <div className="max-w-6xl mx-auto px-6 mt-8 space-y-10">
+        {/* ─── Warmup Card ──────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Link href="/drill/warmup">
+            <div className="glass rounded-2xl p-6 card-hover cursor-pointer group relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-amber-600/10 to-orange-600/10 group-hover:from-amber-600/20 group-hover:to-orange-600/20 transition-all" />
+              <div className="relative flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-amber-500/20">
+                    <Clock className="w-6 h-6 text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-amber-400">🔥 Günlük Isınma — 3 Dakika</h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Beynini uyandır! Refleks açıcı karma pratik egzersiz.
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-amber-400 transition-colors" />
+              </div>
+            </div>
+          </Link>
+        </motion.div>
+
+        {/* ─── Weakness Alert ───────────────────────────── */}
+        {weakTopics.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="glass rounded-2xl p-5 border-destructive/30"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-destructive/20">
+                <BarChart3 className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-destructive">Kırmızı Bölge — Zayıf Alanların</h3>
+                <p className="text-xs text-muted-foreground">Bu konularda doğruluk oranın %60'ın altında. Daha çok pratik yap!</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {weakTopics.map((slug) => {
+                const topic = topics.find((t) => t.slug === slug);
+                return topic ? (
+                  <Link key={slug} href={`/drill/${slug}`}>
+                    <span
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer border border-destructive/30 hover:bg-destructive/20 transition-colors"
+                      style={{ color: topic.color }}
+                    >
+                      {topic.name}
+                    </span>
+                  </Link>
+                ) : null;
+              })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ─── Drill Categories ─────────────────────────── */}
+        <DrillSection
+          title="🧮 Matematik & Sayısal"
+          topics={mathTopics}
+          stats={topicStats}
+          weakTopics={weakTopics}
+          delay={0.3}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+        <DrillSection
+          title="📖 Türkçe & Sözel"
+          topics={verbalTopics}
+          stats={topicStats}
+          weakTopics={weakTopics}
+          delay={0.4}
+        />
+      </div>
+    </main>
+  );
+}
+
+function DrillSection({
+  title,
+  topics,
+  stats,
+  weakTopics,
+  delay,
+}: {
+  title: string;
+  topics: Topic[];
+  stats: TopicStat[];
+  weakTopics: string[];
+  delay: number;
+}) {
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+    >
+      <h2 className="text-lg font-semibold mb-4 text-foreground/90">{title}</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {topics.map((topic, i) => {
+          const Icon = ICON_MAP[topic.icon] || Brain;
+          const stat = stats.find((s) => s.topicSlug === topic.slug);
+          const isWeak = weakTopics.includes(topic.slug);
+          const accuracy = stat && stat.totalAttempts > 0
+            ? Math.round((stat.correctCount / stat.totalAttempts) * 100)
+            : null;
+
+          return (
+            <motion.div
+              key={topic.slug}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: delay + i * 0.05 }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+              <Link href={`/drill/${topic.slug}`}>
+                <div className={cn(
+                  "glass rounded-2xl p-5 card-hover cursor-pointer group relative overflow-hidden",
+                  isWeak && "border-destructive/40"
+                )}>
+                  {isWeak && (
+                    <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-destructive/20 text-[10px] text-destructive font-medium">
+                      ZAYıF
+                    </div>
+                  )}
+                  <div className="flex items-start gap-4">
+                    <div
+                      className="p-3 rounded-xl transition-transform group-hover:scale-110"
+                      style={{ backgroundColor: `${topic.color}20` }}
+                    >
+                      <Icon className="w-6 h-6" style={{ color: topic.color }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm" style={{ color: topic.color }}>
+                        {topic.name}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                        {topic.description}
+                      </p>
+                      {stat && (
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="text-[10px] text-muted-foreground">
+                            {stat.totalAttempts} soru
+                          </span>
+                          {accuracy !== null && (
+                            <span
+                              className="text-[10px] font-medium"
+                              style={{
+                                color: accuracy >= 70 ? "var(--success)" : accuracy >= 40 ? "var(--warning)" : "var(--destructive)",
+                              }}
+                            >
+                              %{accuracy} doğruluk
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform mt-1" />
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          );
+        })}
+      </div>
+    </motion.section>
   );
 }
