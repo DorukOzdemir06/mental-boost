@@ -116,6 +116,11 @@ export default function DrillPage({
   const [countdownNum, setCountdownNum] = useState(3);
   const [timeLeft, setTimeLeft] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [userInput, setUserInput] = useState("");
+  const isTimerPausedRef = useRef(false);
+  const NUMERIC_TOPICS = ["mental-math", "pen-paper-math", "estimation", "pattern-recognition"];
+  const isNumeric = NUMERIC_TOPICS.includes(slug);
+
   const [shaking, setShaking] = useState(false);
   const [, forceUpdate] = useState(0);
 
@@ -158,7 +163,7 @@ export default function DrillPage({
     setTimeLeft(targetMs);
 
     intervalRef.current = setInterval(() => {
-      if (phaseRef.current !== "playing") return;
+      if (phaseRef.current !== "playing" || isTimerPausedRef.current) return;
       const elapsed = Date.now() - startTimeRef.current;
       const remaining = Math.max(0, targetMsRef.current - elapsed);
       setTimeLeft(remaining);
@@ -351,6 +356,8 @@ export default function DrillPage({
   // ─── Handle Next ────────────────────────────────────
   function handleNext() {
     setSelectedAnswer(null);
+    setUserInput("");
+    isTimerPausedRef.current = false;
     setShaking(false);
     useDrillStore.getState().clearAnimation();
     useDrillStore.getState().nextQuestion();
@@ -367,6 +374,8 @@ export default function DrillPage({
     goTo("loading");
     stopTimer();
     setSelectedAnswer(null);
+    setUserInput("");
+    isTimerPausedRef.current = false;
     setShaking(false);
     setStimulusContent(null);
 
@@ -411,6 +420,28 @@ export default function DrillPage({
         return;
       }
       if (phaseRef.current !== "playing") return;
+
+      if (isNumeric) {
+        if (e.key >= "0" && e.key <= "9") {
+          setUserInput((prev) => {
+            if (prev === "") isTimerPausedRef.current = true;
+            return prev + e.key;
+          });
+        } else if (e.key === "Backspace") {
+          setUserInput((prev) => {
+            const next = prev.slice(0, -1);
+            if (next === "") isTimerPausedRef.current = false;
+            return next;
+          });
+        } else if (e.key === "Enter") {
+          setUserInput((current) => {
+            if (current !== "") handleAnswer(current);
+            return current;
+          });
+        }
+        return;
+      }
+
       const q = useDrillStore.getState().currentQuestion;
       if (!q) return;
       const map: Record<string, number> = {
@@ -762,54 +793,91 @@ export default function DrillPage({
                 )}
               </AnimatePresence>
             </div>
-            <div className="grid grid-cols-1 gap-2.5">
-              {q.options.map((opt, i) => {
-                const letter = ["A", "B", "C", "D"][i];
-                // Working memory correctAnswer may contain ";;" separator — extract just the answer portion
-                const actualCorrect = q.correctAnswer.includes(";;") ? q.correctAnswer.split(";;")[0] : q.correctAnswer;
-                const isRight = opt === actualCorrect;
-                const isSel = selectedAnswer === opt;
-                return (
-                  <motion.button
-                    key={`${store.questionIndex}-${i}`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    disabled={isAns}
-                    onClick={() => handleAnswer(opt)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all cursor-pointer glass hover:bg-foreground/5 active:scale-[0.98]",
-                      !isAns && "hover:border-primary/50",
-                      isAns &&
-                        isRight &&
-                        "!bg-emerald-500/20 !border-emerald-500/50",
-                      isAns &&
-                        isSel &&
-                        !isRight &&
-                        "!bg-red-500/20 !border-red-500/50",
-                      isAns && !isSel && !isRight && "opacity-40",
+            {isNumeric ? (
+              <div className="flex flex-col items-center gap-6 py-4">
+                <div className="relative">
+                  <div className={cn(
+                    "text-6xl font-bold font-mono tracking-tighter px-8 py-6 glass rounded-3xl min-w-[200px] text-center transition-all",
+                    userInput === "" ? "text-muted-foreground/20" : "text-primary",
+                    isAns && store.lastResult === "correct" && "!text-emerald-500",
+                    isAns && store.lastResult === "wrong" && "!text-red-500"
+                  )}>
+                    {userInput || "000"}
+                    {phase === "playing" && (
+                      <motion.span
+                        animate={{ opacity: [1, 0] }}
+                        transition={{ repeat: Infinity, duration: 0.8 }}
+                        className="inline-block w-1 h-12 bg-primary ml-2 translate-y-1"
+                      />
                     )}
-                  >
-                    <span
+                  </div>
+                  
+                  {isAns && store.lastResult === "wrong" && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="absolute -bottom-10 left-0 w-full text-center text-emerald-500 font-bold text-sm"
+                    >
+                      Doğru Cevap: {q.correctAnswer}
+                    </motion.div>
+                  )}
+                </div>
+
+                {!isAns && (
+                  <p className="text-xs text-muted-foreground animate-pulse">
+                    Cevabı yazıp <span className="font-bold text-foreground">Enter</span> tuşuna bas.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2.5">
+                {q.options.map((opt, i) => {
+                  const letter = ["A", "B", "C", "D"][i];
+                  const actualCorrect = q.correctAnswer.includes(";;") ? q.correctAnswer.split(";;")[0] : q.correctAnswer;
+                  const isRight = opt === actualCorrect;
+                  const isSel = selectedAnswer === opt;
+                  return (
+                    <motion.button
+                      key={`${store.questionIndex}-${i}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      disabled={isAns}
+                      onClick={() => handleAnswer(opt)}
                       className={cn(
-                        "w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold flex-shrink-0 bg-white/5",
-                        isAns && isRight && "!bg-emerald-500 text-white",
-                        isAns && isSel && !isRight && "!bg-red-500 text-white",
+                        "w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all cursor-pointer glass hover:bg-foreground/5 active:scale-[0.98]",
+                        !isAns && "hover:border-primary/50",
+                        isAns &&
+                          isRight &&
+                          "!bg-emerald-500/20 !border-emerald-500/50",
+                        isAns &&
+                          isSel &&
+                          !isRight &&
+                          "!bg-red-500/20 !border-red-500/50",
+                        isAns && !isSel && !isRight && "opacity-40",
                       )}
                     >
-                      {isAns && isRight ? (
-                        <Check className="w-4 h-4" />
-                      ) : isAns && isSel && !isRight ? (
-                        <X className="w-4 h-4" />
-                      ) : (
-                        letter
-                      )}
-                    </span>
-                    <span className="text-sm font-medium">{opt}</span>
-                  </motion.button>
-                );
-              })}
-            </div>
+                      <span
+                        className={cn(
+                          "w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold flex-shrink-0 bg-white/5",
+                          isAns && isRight && "!bg-emerald-500 text-white",
+                          isAns && isSel && !isRight && "!bg-red-500 text-white",
+                        )}
+                      >
+                        {isAns && isRight ? (
+                          <Check className="w-4 h-4" />
+                        ) : isAns && isSel && !isRight ? (
+                          <X className="w-4 h-4" />
+                        ) : (
+                          letter
+                        )}
+                      </span>
+                      <span className="text-sm font-medium">{opt}</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
           </motion.div>
         </AnimatePresence>
 
