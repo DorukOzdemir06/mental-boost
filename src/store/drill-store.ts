@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { generateQuestion } from "@/lib/generators";
 
 export interface Question {
   id: number;
@@ -26,10 +27,14 @@ export interface DrillState {
   // Session
   isActive: boolean;
   currentQuestion: Question | null;
-  questions: Question[];
+  questions: Question[]; // DB bank for non-generative topics
   questionIndex: number;
   totalQuestions: number;
   topicSlug: string;
+
+  // Adaptive Difficulty Engine
+  currentDifficulty: number;
+  accuracyHistory: boolean[]; // tracks last N answers
 
   // Scoring
   combo: number;
@@ -48,7 +53,7 @@ export interface DrillState {
   // Personal Best
   personalBest: { bestTimeMs: number; bestStreak: number; bestScore: number } | null;
 
-  // Saved results (persisted after endDrill so results screen can read them)
+  // Saved results
   savedResults: SessionResults | null;
 
   // Actions
@@ -59,13 +64,20 @@ export interface DrillState {
   clearAnimation: () => void;
 }
 
+// How many questions per drill session?
+const SESSION_LENGTH = 10;
+
 export const useDrillStore = create<DrillState>((set, get) => ({
   isActive: false,
   currentQuestion: null,
   questions: [],
   questionIndex: 0,
-  totalQuestions: 0,
+  totalQuestions: SESSION_LENGTH,
   topicSlug: "",
+  
+  currentDifficulty: 1, // Starts at 1, will adapt
+  accuracyHistory: [],
+
   combo: 0,
   maxCombo: 0,
   score: 0,
@@ -80,13 +92,22 @@ export const useDrillStore = create<DrillState>((set, get) => ({
   savedResults: null,
 
   startDrill: (questions, topicSlug, pb) => {
+    // Generate first question if it's a procedural topic
+    let firstQ = generateQuestion(topicSlug, 1);
+    // If null, it means it's a DB-based topic (like paragraph-scanning)
+    if (!firstQ && questions.length > 0) {
+      firstQ = questions[0];
+    }
+
     set({
       isActive: true,
       questions,
-      currentQuestion: questions[0] || null,
+      currentQuestion: firstQ || null,
       questionIndex: 0,
-      totalQuestions: questions.length,
+      totalQuestions: SESSION_LENGTH, // Even for DB topics, we cap at 10
       topicSlug,
+      currentDifficulty: 1, // Reset adaptivity
+      accuracyHistory: [],
       combo: 0,
       maxCombo: 0,
       score: 0,
@@ -108,11 +129,32 @@ export const useDrillStore = create<DrillState>((set, get) => ({
     if (!q) return { isCorrect: false, earnedXp: 0, newCombo: 0 };
 
     const isCorrect = answer === q.correctAnswer;
+    
+    // ─── 85% Rule (Difficulty Adaptation) ───
+    const newHistory = [...state.accuracyHistory, isCorrect];
+    if (newHistory.length > 10) newHistory.shift(); // keep last 10 max
+    
+    let newDifficulty = state.currentDifficulty;
+    
+    // Evaluate if we should scale up or down
+    if (newHistory.length >= 3) {
+      const recent3 = newHistory.slice(-3);
+      const allRight = recent3.every(Boolean);
+      const allWrong = recent3.every(b => !b);
+      
+      if (allRight) {
+        newDifficulty = Math.min(10, state.currentDifficulty + 1);
+      } else if (allWrong || (!isCorrect && state.currentDifficulty > 1)) {
+        // Punish harsh on wrong to keep motivation if they fail
+        newDifficulty = Math.max(1, state.currentDifficulty - 1);
+      }
+    }
+
     const newCombo = isCorrect ? state.combo + 1 : 0;
-    // Use the CURRENT combo (before increment) for multiplier calculation
     const comboMultiplier = isCorrect ? Math.min(1 + state.combo * 0.1, 3) : 1;
-    const baseXp = isCorrect ? q.difficulty * 10 : 0;
-    const timeBonus = isCorrect && timeTakenMs < q.targetTimeMs ? Math.floor((1 - timeTakenMs / q.targetTimeMs) * 20) : 0;
+    // XP scales intensely with procedural difficulty levels
+    const baseXp = isCorrect ? q.difficulty * 15 : 0;
+    const timeBonus = isCorrect && timeTakenMs < q.targetTimeMs ? Math.floor((1 - timeTakenMs / q.targetTimeMs) * 30) : 0;
     const earnedXp = Math.floor((baseXp + timeBonus) * comboMultiplier);
 
     const showTactic = (!isCorrect || timeTakenMs > q.targetTimeMs) && q.tacticHint ? q.tacticHint : null;
@@ -127,6 +169,8 @@ export const useDrillStore = create<DrillState>((set, get) => ({
       lastResult: isCorrect ? "correct" : "wrong",
       showTactic,
       shakeScreen: !isCorrect,
+      accuracyHistory: newHistory,
+      currentDifficulty: newDifficulty,
     });
 
     return { isCorrect, earnedXp, newCombo };
@@ -135,13 +179,24 @@ export const useDrillStore = create<DrillState>((set, get) => ({
   nextQuestion: () => {
     const state = get();
     const nextIndex = state.questionIndex + 1;
-    if (nextIndex >= state.questions.length) {
+    
+    if (nextIndex >= state.totalQuestions) {
       set({ isActive: false, currentQuestion: null });
       return;
     }
+
+    // Attempt to generate the next question dynamically with the NEW adapted difficulty
+    let nextQ = generateQuestion(state.topicSlug, state.currentDifficulty);
+    
+    // Fallback to static DB questions if generator returns null
+    if (!nextQ) {
+      // Loop around if db bank is smaller than session length
+      nextQ = state.questions[nextIndex % state.questions.length]; 
+    }
+
     set({
       questionIndex: nextIndex,
-      currentQuestion: state.questions[nextIndex],
+      currentQuestion: nextQ || null,
       lastResult: null,
       showTactic: null,
       shakeScreen: false,
@@ -150,7 +205,6 @@ export const useDrillStore = create<DrillState>((set, get) => ({
 
   endDrill: () => {
     const state = get();
-    // Save results BEFORE clearing state
     set({
       savedResults: {
         correctCount: state.correctCount,

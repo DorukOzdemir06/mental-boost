@@ -75,9 +75,12 @@ function getStimulusContent(
     return { text: q.correctAnswer };
   }
   if (topicSlug === "working-memory") {
-    // The correct answer contains the sequence (e.g. "4-7-2" or "Kalem-Masa-Kitap")
-    const items = q.correctAnswer.split("-").map((s) => s.trim());
-    return { text: q.correctAnswer, items };
+    // The correct answer from generator contains "UI_ANS;;ORIGINAL_SEQ"
+    // e.g. "B-A;;A-B". We want to display original sequence as stimulus.
+    const parts = q.correctAnswer.split(";;");
+    const originalSeq = parts.length > 1 ? parts[1] : q.correctAnswer;
+    const items = originalSeq.split("-").map((s) => s.trim());
+    return { text: originalSeq, items };
   }
   return { text: "" };
 }
@@ -113,6 +116,9 @@ export default function DrillPage({
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [shaking, setShaking] = useState(false);
   const [, forceUpdate] = useState(0);
+
+  // Subvocalization suppression logic
+  const [hideContext, setHideContext] = useState(false);
 
   // Stimulus state
   const [stimulusContent, setStimulusContent] = useState<{
@@ -181,6 +187,17 @@ export default function DrillPage({
 
   // ─── Show Stimulus then transition to playing ───────
   function showStimulusThenPlay(q: Question) {
+    // Reset hide context for mathematical subvocalization suppression
+    setHideContext(false);
+    if (slug === "mental-math" && q.difficulty >= 4) {
+      // Disappear question body after 3 seconds on hard levels
+      setTimeout(() => {
+        if (useDrillStore.getState().isActive) {
+          setHideContext(true);
+        }
+      }, 3000);
+    }
+
     if (!needsStimulus(slug)) {
       // Normal topics — go straight to playing
       goTo("playing");
@@ -348,7 +365,14 @@ export default function DrillPage({
       ]);
       const questions: Question[] = await qRes.json();
       const pb = await pbRes.json();
-      if (questions.length === 0) return;
+
+      // For DB topics, an empty response means no content. For procedural topics, array can completely be empty!
+      const generativeTopics = ["mental-math", "pen-paper-math", "estimation", "pattern-recognition", "tachistoscope", "working-memory"];
+      if (questions.length === 0 && !generativeTopics.includes(slug)) {
+        goTo("results");
+        return;
+      }
+
       useDrillStore.getState().startDrill(questions, slug, pb);
       setCountdownNum(3);
       goTo("countdown");
@@ -482,16 +506,20 @@ export default function DrillPage({
     );
   }
 
-  // Blank screen after tachistoscope flash
+  // Blank screen after tachistoscope flash to trigger Retinal Masking
   if (phase === "stimulus-blank") {
+    const isTachy = slug === "tachistoscope";
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-muted-foreground text-sm"
+          className={cn(
+            "text-muted-foreground",
+            isTachy ? "text-5xl md:text-7xl font-mono tracking-widest text-primary/80" : "text-sm"
+          )}
         >
-          Ne gördün?
+          {isTachy ? "#####" : "Ne gördün?"}
         </motion.div>
       </div>
     );
@@ -684,10 +712,32 @@ export default function DrillPage({
             transition={{ duration: 0.2 }}
             className="w-full max-w-xl space-y-6"
           >
-            <div className="glass-strong rounded-2xl p-6">
-              <p className="text-lg font-medium leading-relaxed whitespace-pre-line">
-                {q.content}
-              </p>
+            <div className="glass-strong rounded-2xl p-6 min-h-[120px] flex items-center justify-center relative">
+              <AnimatePresence mode="wait">
+                {!hideContext ? (
+                  <motion.div
+                    key="visible"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, filter: "blur(4px)" }}
+                    className="w-full text-center"
+                  >
+                    <p className="text-lg font-medium leading-relaxed whitespace-pre-line text-foreground">
+                      {q.content}
+                    </p>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="hidden"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-muted-foreground flex flex-col items-center gap-2"
+                  >
+                    <Eye className="w-6 h-6 opacity-50" />
+                    <span className="text-sm font-medium">Soru Zihninde!</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
             <div className="grid grid-cols-1 gap-2.5">
               {q.options.map((opt, i) => {
