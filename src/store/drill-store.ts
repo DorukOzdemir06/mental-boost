@@ -110,7 +110,7 @@ export const useDrillStore = create<DrillState>((set, get) => ({
           if (parsed.currentDifficulty) initialDiff = parsed.currentDifficulty;
           if (parsed.accuracyHistory) initialHist = parsed.accuracyHistory;
         }
-      } catch(e) {}
+      } catch {}
     }
 
     set({

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, TrendingUp, TrendingDown, Target, Brain, Award, AlertCircle, LucideIcon } from "lucide-react";
+import { X, TrendingDown, Target, Brain, Award, AlertCircle, LucideIcon } from "lucide-react";
 import { cn, formatMs } from "@/lib/utils";
 
 interface TopicStat {

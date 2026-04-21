@@ -1,15 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Clock,
   Check,
-  X,
-  Flame,
-  Home,
   ChevronRight,
-  Lightbulb,
+  Home,
+  Flame,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
@@ -30,48 +28,8 @@ interface Question {
 }
 
 const WARMUP_DURATION_MS = 3 * 60 * 1000; // 3 minutes
-const PROCEDURAL_TOPICS = [
-  "mental-math",
-  "estimation",
-  "pattern-recognition",
-  "tachistoscope",
-  "working-memory",
-];
 
-// ─── Stimulus helpers ─────────────────────────────────
-const STIMULUS_TOPICS = ["tachistoscope", "working-memory"];
-function needsStimulus(topicSlug: string): boolean {
-  return STIMULUS_TOPICS.includes(topicSlug);
-}
-function getTachistoscopeFlashMs(difficulty: number): number {
-  if (difficulty >= 4) return 150;
-  if (difficulty >= 3) return 250;
-  if (difficulty >= 2) return 400;
-  return 600;
-}
-function getWorkingMemoryShowMs(difficulty: number): number {
-  if (difficulty >= 4) return 1500;
-  if (difficulty >= 3) return 2000;
-  if (difficulty >= 2) return 2500;
-  return 3000;
-}
-function getStimulusContent(q: Question, topicSlug: string): { text: string; items?: string[] } {
-  if (topicSlug === "tachistoscope") return { text: q.correctAnswer };
-  if (topicSlug === "working-memory") {
-    const parts = q.correctAnswer.split(";;");
-    const originalSeq = parts.length > 1 ? parts[1] : q.correctAnswer;
-    const items = originalSeq.split("-").map((s) => s.trim());
-    return { text: originalSeq, items };
-  }
-  return { text: "" };
-}
-function getStimulusDurationMs(q: Question, topicSlug: string): number {
-  if (topicSlug === "tachistoscope") return getTachistoscopeFlashMs(q.difficulty);
-  if (topicSlug === "working-memory") return getWorkingMemoryShowMs(q.difficulty);
-  return 0;
-}
-
-type Phase = "countdown" | "stimulus" | "stimulus-blank" | "playing" | "answered" | "done";
+type Phase = "countdown" | "playing" | "stimulus" | "stimulus-blank" | "answered" | "done";
 
 export default function WarmupPage() {
   const [phase, setPhase] = useState<Phase>("countdown");
@@ -81,170 +39,126 @@ export default function WarmupPage() {
   const [globalTimeLeft, setGlobalTimeLeft] = useState(WARMUP_DURATION_MS);
   
   const [stimulusContent, setStimulusContent] = useState<{ text: string; items?: string[] } | null>(null);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [isSelected, setIsSelected] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<"correct" | "wrong" | null>(null);
-  const [hideContext, setHideContext] = useState(false);
 
   const [combo, setCombo] = useState(0);
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalWrong, setTotalWrong] = useState(0);
   const [totalXp, setTotalXp] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
-  
-  const phaseRef = useRef<Phase>("countdown");
-  const globalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTimeRef = useRef(0);
 
-  function goTo(p: Phase) {
-    phaseRef.current = p;
-    setPhase(p);
-  }
+  const handleNext = useCallback(() => {
+    const warmupTopics = ["mental-math", "pen-paper-math", "estimation", "pattern-recognition", "tachistoscope", "working-memory"];
+    const randomTopic = warmupTopics[Math.floor(Math.random() * warmupTopics.length)];
+    const q = generateQuestion(randomTopic, 2); // Warmup difficulty is 2
+    if (!q) return;
 
-  // Load first question
-  useEffect(() => {
-    let cancelled = false;
-    // Generate async so we don't block render (even though it's sync, keeps pattern)
-    setTimeout(() => {
-      if (cancelled) return;
-      loadNextQuestion();
-    }, 0);
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setCurrentQ(q);
+    setIsSelected(null);
+    setLastResult(null);
+    setCurrentIdx((prev) => prev + 1);
+
+    // Some topics have stimulus phase
+    if (["tachistoscope", "working-memory"].includes(q.topicSlug)) {
+      setPhase("stimulus");
+      if (q.topicSlug === "working-memory") {
+        const content = JSON.parse(q.content);
+        setStimulusContent({ text: "", items: content.sequence });
+        setTimeout(() => setPhase("stimulus-blank"), 2000);
+        setTimeout(() => setPhase("playing"), 2500);
+      } else {
+        setStimulusContent({ text: q.content });
+        setTimeout(() => setPhase("stimulus-blank"), 150);
+        setTimeout(() => setPhase("playing"), 300);
+      }
+    } else {
+      setPhase("playing");
+    }
   }, []);
 
-  function loadNextQuestion() {
-    const randomTopic = PROCEDURAL_TOPICS[Math.floor(Math.random() * PROCEDURAL_TOPICS.length)];
-    const randomDiff = Math.floor(Math.random() * 3) + 1; // Level 1-3 for warmup
-    const q = generateQuestion(randomTopic, randomDiff);
-    if (q) {
-      setCurrentQ(q as Question);
-      setHideContext(false);
-      setSelectedAnswer(null);
-      setLastResult(null);
+  const handleAnswer = useCallback((option: string) => {
+    // Access current state via argument or refs if needed, but here we can just use the closure since it's recreated or use functional updates
+    setPhase((prev) => {
+      if (prev === "answered") return prev;
       
-      if (phaseRef.current === "answered" || phaseRef.current === "playing") {
-        showStimulusThenPlay(q as Question, randomTopic);
-      }
-    }
-  }
+      setCurrentQ((q) => {
+        if (!q) return q;
+        const isRight = option === q.correctAnswer;
+        setIsSelected(option);
 
-  // Countdown
+        if (isRight) {
+          setLastResult("correct");
+          setTotalCorrect((c) => c + 1);
+          setCombo((comb) => {
+            const next = comb + 1;
+            setMaxCombo((m) => Math.max(m, next));
+            setTotalXp((xp) => xp + 10 + (next > 1 ? next * 2 : 0));
+            return next;
+          });
+          sfx.playSuccess();
+        } else {
+          setLastResult("wrong");
+          setTotalWrong((w) => w + 1);
+          setCombo(0);
+          sfx.playError();
+        }
+        return q;
+      });
+      
+      return "answered";
+    });
+  }, []);
+
+  // Initial countdown
   useEffect(() => {
     if (phase !== "countdown") return;
-    if (countdown <= 0) {
-      const id = setTimeout(() => {
-        startTimeRef.current = Date.now();
-        if (currentQ) {
-          showStimulusThenPlay(currentQ, currentQ.topicSlug);
-        }
-      }, 0);
-      return () => clearTimeout(id);
-    }
-    const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    const timer = setTimeout(() => {
+      if (countdown > 1) {
+        setCountdown(prev => prev - 1);
+      } else {
+        setPhase("playing");
+        handleNext();
+      }
+    }, 1000);
     return () => clearTimeout(timer);
-  }, [countdown, phase, currentQ]);
+  }, [countdown, phase, handleNext]);
 
   // Global timer
   useEffect(() => {
     if (phase === "countdown" || phase === "done") return;
-
-    globalTimerRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTimeRef.current;
-      const remaining = Math.max(0, WARMUP_DURATION_MS - elapsed);
-      setGlobalTimeLeft(remaining);
-      if (remaining <= 0) {
-        clearInterval(globalTimerRef.current!);
-        goTo("done");
-      }
+    const timer = setInterval(() => {
+      setGlobalTimeLeft((prev) => {
+        if (prev <= 100) {
+          setPhase("done");
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 100;
+      });
     }, 100);
-
-    return () => {
-      if (globalTimerRef.current) clearInterval(globalTimerRef.current);
-    };
+    return () => clearInterval(timer);
   }, [phase]);
 
-  function showStimulusThenPlay(q: Question, topicSlug: string) {
-    if (!needsStimulus(topicSlug)) {
-      goTo("playing");
-      return;
-    }
-
-    const content = getStimulusContent(q, topicSlug);
-    const durationMs = getStimulusDurationMs(q, topicSlug);
-    setStimulusContent(content);
-    goTo("stimulus");
-
-    setTimeout(() => {
-      if (phaseRef.current !== "stimulus") return;
-      if (topicSlug === "tachistoscope") {
-        goTo("stimulus-blank");
-        setTimeout(() => {
-          if (phaseRef.current !== "stimulus-blank") return;
-          setStimulusContent(null);
-          goTo("playing");
-        }, 300);
-      } else {
-        setStimulusContent(null);
-        goTo("playing");
-      }
-    }, durationMs);
-  }
-
-  const handleAnswer = (answer: string) => {
-    if (phaseRef.current !== "playing" || !currentQ) return;
-    goTo("answered");
-    setSelectedAnswer(answer);
-
-    const actualCorrect = currentQ.correctAnswer.includes(";;") ? currentQ.correctAnswer.split(";;")[0] : currentQ.correctAnswer;
-    const isCorrect = answer === actualCorrect;
-
-    if (isCorrect) {
-      sfx.playSuccess();
-      const newCombo = combo + 1;
-      setCombo(newCombo);
-      setMaxCombo(Math.max(maxCombo, newCombo));
-      setTotalCorrect((v) => v + 1);
-      setTotalXp((v) => v + currentQ.difficulty * 5);
-      setLastResult("correct");
-    } else {
-      sfx.playError();
-      setCombo(0);
-      setTotalWrong((v) => v + 1);
-      setLastResult("wrong");
-    }
-    
-    // Auto-next after 1.5s if we don't want to make user click next in warmup?
-    // User has to click next manually now.
-  };
-
-  const handleNext = () => {
-    setCurrentIdx(i => i + 1);
-    loadNextQuestion();
-  };
-
-  // Keyboard
+  // Keyboard support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (phaseRef.current === "answered") {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleNext();
-        }
-        return;
-      }
-      
-      if (phaseRef.current !== "playing" || !currentQ) return;
-      const keyMap: Record<string, number> = { a: 0, b: 1, c: 2, d: 3, "1": 0, "2": 1, "3": 2, "4": 3 };
-      const idx = keyMap[e.key.toLowerCase()];
-      if (idx !== undefined && idx < currentQ.options.length) {
-        handleAnswer(currentQ.options[idx]);
-      }
+      if (phase !== "playing") return;
+      const key = e.key.toUpperCase();
+      const options = ["A", "B", "C", "D"];
+      const nums = ["1", "2", "3", "4"];
+
+      setCurrentQ((q) => {
+        if (!q) return q;
+        if (options.includes(key)) handleAnswer(q.options[options.indexOf(key)]);
+        else if (nums.includes(key)) handleAnswer(q.options[nums.indexOf(key)]);
+        return q;
+      });
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentQ]); // only dependencies that matter
+  }, [phase, handleAnswer]);
 
-  // ─── Render Phases ────────────────────────────────────
   if (phase === "countdown") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background gap-4">
@@ -337,7 +251,7 @@ export default function WarmupPage() {
             </motion.div>
           )}
           <div className="text-xs text-muted-foreground px-2 py-1 rounded-full glass">
-            {currentIdx + 1} soru
+            {currentIdx} soru
           </div>
         </div>
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg glass">
@@ -390,100 +304,89 @@ export default function WarmupPage() {
               </div>
             ) : (
               // Single text (Tachistoscope)
-              <h2 className="text-5xl md:text-7xl font-bold tracking-tight text-white drop-shadow-lg">
+              <motion.h2
+                initial={{ scale: 1.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="text-5xl md:text-8xl font-bold tracking-tighter"
+              >
                 {stimulusContent.text}
-              </h2>
+              </motion.h2>
             )}
-            <p className="text-muted-foreground mt-6 text-sm font-medium animate-pulse opacity-50">
-              Odaklan...
-            </p>
           </div>
         </div>
       )}
 
-      {/* Question Phase */}
+      {/* Playing Phase */}
       {(phase === "playing" || phase === "answered") && currentQ && (
-        <div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentIdx}
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              className="w-full max-w-xl space-y-6"
-            >
-              {!hideContext && (
-                <div className="glass-strong rounded-2xl p-6">
-                  <p className="text-lg font-medium leading-relaxed whitespace-pre-line text-center">
-                    {currentQ.content}
-                  </p>
-                </div>
-              )}
-              <div className="grid grid-cols-1 gap-2.5">
-                {currentQ.options.map((option, i) => {
-                  const letter = ["A", "B", "C", "D"][i];
-                  const actualCorrect = currentQ.correctAnswer.includes(";;") ? currentQ.correctAnswer.split(";;")[0] : currentQ.correctAnswer;
-                  const isCorrectOption = option === actualCorrect;
-                  const isSelected = selectedAnswer === option;
-                  return (
-                    <motion.button
-                      key={i}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      disabled={phase === "answered"}
-                      onClick={() => handleAnswer(option)}
-                      className={cn(
-                        "w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all glass hover:bg-foreground/5 active:scale-[0.98]",
-                        phase === "answered" && isCorrectOption && "!bg-success/20 !border-success/50",
-                        phase === "answered" && isSelected && !isCorrectOption && "!bg-destructive/20 !border-destructive/50",
-                        phase === "answered" && !isSelected && !isCorrectOption && "opacity-40",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold flex-shrink-0 bg-white/5",
-                          phase === "answered" && isCorrectOption && "!bg-success text-white",
-                          phase === "answered" && isSelected && !isCorrectOption && "!bg-destructive text-white",
-                        )}
-                      >
-                        {phase === "answered" && isCorrectOption ? (
-                          <Check className="w-4 h-4" />
-                        ) : phase === "answered" && isSelected && !isCorrectOption ? (
-                          <X className="w-4 h-4" />
-                        ) : (
-                          letter
-                        )}
-                      </span>
-                      <span className="text-sm font-medium">{option}</span>
-                    </motion.button>
-                  );
-                })}
+        <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
+          <motion.div
+            key={currentQ.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-2xl"
+          >
+            <div className="glass-strong rounded-3xl p-8 text-center border-primary/20 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+              <div className="text-2xl md:text-3xl font-bold mb-2">
+                {currentQ.content}
               </div>
-            </motion.div>
-          </AnimatePresence>
+            </div>
 
-          {phase === "answered" && lastResult && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-3">
-              {lastResult === "correct" ? (
-                <span className="text-sm font-semibold text-success flex items-center gap-1 uppercase tracking-widest">
-                  <Check className="w-4 h-4" />
-                  {useThemeStore.getState().theme === "bloodborne" ? "PREY SLAUGHTERED" : 
-                   useThemeStore.getState().theme === "ds3" ? "HEIR OF FIRE DESTROYED" : 
-                   useThemeStore.getState().theme === "gta5" || useThemeStore.getState().theme === "gtasa" ? "RESPECT +" : 
-                   useThemeStore.getState().theme === "arcade" ? "COMBO!" : "Doğru!"}
-                </span>
-              ) : (
-                <span className="text-sm font-semibold text-destructive flex items-center gap-1 uppercase tracking-widest">
-                  <X className="w-4 h-4" />
-                  {useThemeStore.getState().theme === "bloodborne" ? "YOU DIED" : 
-                   useThemeStore.getState().theme === "ds3" ? "YOU DIED" : 
-                   useThemeStore.getState().theme === "gta5" || useThemeStore.getState().theme === "gtasa" ? "WASTED" : 
-                   useThemeStore.getState().theme === "arcade" ? "GAME OVER" : "Yanlış!"}
-                </span>
-              )}
-            </motion.div>
-          )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+              {currentQ.options.map((option) => (
+                <motion.button
+                  key={option}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  disabled={phase === "answered"}
+                  onClick={() => handleAnswer(option)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all glass hover:bg-foreground/5 active:scale-[0.98]",
+                    phase === "answered" && option === currentQ.correctAnswer && "!bg-success/20 !border-success/50",
+                    phase === "answered" && isSelected === option && option !== currentQ.correctAnswer && "!bg-destructive/20 !border-destructive/50",
+                    phase === "answered" && isSelected !== option && option !== currentQ.correctAnswer && "opacity-40",
+                  )}
+                >
+                  <div className={cn(
+                    "w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm",
+                    "bg-secondary/50 border border-border"
+                  )}>
+                    {["A", "B", "C", "D"][currentQ.options.indexOf(option)]}
+                  </div>
+                  <span className="text-lg font-medium">{option}</span>
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+
+          <AnimatePresence>
+            {phase === "answered" && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center gap-4"
+              >
+                {lastResult === "correct" ? (
+                  <div className="flex items-center gap-2 text-primary font-bold text-xl">
+                    <Check className="w-6 h-6" /> 
+                    <span>
+                      {useThemeStore.getState().theme === "bloodborne" ? "PREY SLAUGHTERED" : 
+                       useThemeStore.getState().theme === "ds3" ? "HEIR OF FIRE DESTROYED" : 
+                       useThemeStore.getState().theme === "gta5" || useThemeStore.getState().theme === "gtasa" ? "RESPECT +" : 
+                       useThemeStore.getState().theme === "arcade" ? "COMBO!" : "Doğru!"}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-destructive font-bold text-xl">
+                    {useThemeStore.getState().theme === "bloodborne" ? "YOU DIED" : 
+                     useThemeStore.getState().theme === "ds3" ? "YOU DIED" : 
+                     useThemeStore.getState().theme === "gta5" || useThemeStore.getState().theme === "gtasa" ? "WASTED" : 
+                     useThemeStore.getState().theme === "arcade" ? "GAME OVER" : "Yanlış!"}
+                  </span>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {phase === "answered" && (
             <motion.button

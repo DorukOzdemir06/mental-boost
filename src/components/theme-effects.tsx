@@ -10,7 +10,7 @@ export function ThemeEffects() {
   const theme = useThemeStore((state) => state.theme);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animFrameRef = useRef<number>(0);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const canvas = canvasRef.current;
