@@ -1,9 +1,19 @@
 import { db } from "@/db";
 import * as schema from "@/db/schema";
-import { eq, sql, desc, and } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+// Fisher-Yates shuffle — returns a new array
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -22,10 +32,10 @@ export async function GET(request: NextRequest) {
     .limit(limit)
     .all();
 
-  // Parse options JSON
+  // Parse options JSON and shuffle option order
   const parsed = questions.map((q) => ({
     ...q,
-    options: JSON.parse(q.options as string),
+    options: shuffle(JSON.parse(q.options as string) as string[]),
   }));
 
   return Response.json(parsed);

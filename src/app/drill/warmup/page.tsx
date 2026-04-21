@@ -1,8 +1,17 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Brain, Clock, Check, X, Flame, Trophy, Home, RotateCcw, ChevronRight, Lightbulb, Zap } from "lucide-react";
+import {
+  Clock,
+  Check,
+  X,
+  Flame,
+  Home,
+  ChevronRight,
+  Lightbulb,
+  Zap,
+} from "lucide-react";
 import Link from "next/link";
 import { cn, formatMs } from "@/lib/utils";
 
@@ -20,14 +29,18 @@ interface WarmupQuestion {
 const WARMUP_DURATION_MS = 3 * 60 * 1000; // 3 minutes
 
 export default function WarmupPage() {
-  const [phase, setPhase] = useState<"countdown" | "active" | "done">("countdown");
+  const [phase, setPhase] = useState<"countdown" | "active" | "done">(
+    "countdown",
+  );
   const [countdown, setCountdown] = useState(3);
   const [questions, setQuestions] = useState<WarmupQuestion[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [globalTimeLeft, setGlobalTimeLeft] = useState(WARMUP_DURATION_MS);
   const [answered, setAnswered] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<"correct" | "wrong" | null>(null);
+  const [lastResult, setLastResult] = useState<"correct" | "wrong" | null>(
+    null,
+  );
   const [showTactic, setShowTactic] = useState<string | null>(null);
   const [combo, setCombo] = useState(0);
   const [totalCorrect, setTotalCorrect] = useState(0);
@@ -38,36 +51,49 @@ export default function WarmupPage() {
   const startTimeRef = useRef(0);
 
   // Load all questions randomly across all topics
-  const loadQuestions = useCallback(async () => {
-    const topics = ["mental-math", "pen-paper-math", "estimation", "pattern-recognition",
-      "tachistoscope", "paragraph-scanning", "table-builder", "working-memory"];
-
-    const allQuestions: WarmupQuestion[] = [];
-    for (const t of topics) {
-      const res = await fetch(`/api/questions?topic=${t}&limit=5`);
-      const qs = await res.json();
-      allQuestions.push(...qs);
-    }
-
-    // Shuffle
-    for (let i = allQuestions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
-    }
-    setQuestions(allQuestions);
-  }, []);
-
   useEffect(() => {
-    loadQuestions();
-  }, [loadQuestions]);
+    let cancelled = false;
+    (async () => {
+      const topicSlugs = [
+        "mental-math",
+        "pen-paper-math",
+        "estimation",
+        "pattern-recognition",
+        "tachistoscope",
+        "paragraph-scanning",
+        "table-builder",
+        "working-memory",
+      ];
+
+      const allQuestions: WarmupQuestion[] = [];
+      for (const t of topicSlugs) {
+        const res = await fetch(`/api/questions?topic=${t}&limit=5`);
+        const qs = await res.json();
+        allQuestions.push(...qs);
+      }
+
+      // Shuffle
+      for (let i = allQuestions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
+      }
+      if (!cancelled) setQuestions(allQuestions);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Countdown
   useEffect(() => {
     if (phase !== "countdown") return;
     if (countdown <= 0) {
-      setPhase("active");
-      startTimeRef.current = Date.now();
-      return;
+      // Use setTimeout to avoid synchronous setState in effect body
+      const id = setTimeout(() => {
+        setPhase("active");
+        startTimeRef.current = Date.now();
+      }, 0);
+      return () => clearTimeout(id);
     }
     const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
     return () => clearTimeout(timer);
@@ -129,7 +155,7 @@ export default function WarmupPage() {
     setCurrentIdx(currentIdx + 1);
   };
 
-  // Keyboard
+  // Keyboard — register on every render to always have fresh closures
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (phase !== "active") return;
@@ -142,7 +168,16 @@ export default function WarmupPage() {
       }
       const q = questions[currentIdx];
       if (!q) return;
-      const keyMap: Record<string, number> = { a: 0, b: 1, c: 2, d: 3, "1": 0, "2": 1, "3": 2, "4": 3 };
+      const keyMap: Record<string, number> = {
+        a: 0,
+        b: 1,
+        c: 2,
+        d: 3,
+        "1": 0,
+        "2": 1,
+        "3": 2,
+        "4": 3,
+      };
       const idx = keyMap[e.key.toLowerCase()];
       if (idx !== undefined && idx < q.options.length) {
         handleAnswer(q.options[idx]);
@@ -150,13 +185,15 @@ export default function WarmupPage() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [answered, currentIdx, phase, questions]);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Countdown ──────────────────────────────────────
   if (phase === "countdown") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background gap-4">
-        <div className="text-sm text-amber-400 font-medium mb-4">🔥 Isınma Modu</div>
+        <div className="text-sm text-amber-400 font-medium mb-4">
+          🔥 Isınma Modu
+        </div>
         <motion.div
           key={countdown}
           initial={{ scale: 2, opacity: 0 }}
@@ -165,7 +202,9 @@ export default function WarmupPage() {
         >
           {countdown}
         </motion.div>
-        <p className="text-xs text-muted-foreground mt-4">3 dakika, karma sorular, refleks açıcı!</p>
+        <p className="text-xs text-muted-foreground mt-4">
+          3 dakika, karma sorular, refleks açıcı!
+        </p>
       </div>
     );
   }
@@ -188,15 +227,21 @@ export default function WarmupPage() {
             <Clock className="w-12 h-12 text-amber-400" />
           </motion.div>
           <h2 className="text-2xl font-bold">Isınma Tamamlandı! 🔥</h2>
-          <p className="text-sm text-muted-foreground">Beyinin ısındı, artık asıl antrenmanlara geçebilirsin!</p>
+          <p className="text-sm text-muted-foreground">
+            Beyinin ısındı, artık asıl antrenmanlara geçebilirsin!
+          </p>
 
           <div className="grid grid-cols-3 gap-4">
             <div className="glass rounded-xl p-3">
-              <div className="text-xl font-bold text-success">{totalCorrect}</div>
+              <div className="text-xl font-bold text-success">
+                {totalCorrect}
+              </div>
               <div className="text-[10px] text-muted-foreground">Doğru</div>
             </div>
             <div className="glass rounded-xl p-3">
-              <div className="text-xl font-bold text-destructive">{totalWrong}</div>
+              <div className="text-xl font-bold text-destructive">
+                {totalWrong}
+              </div>
               <div className="text-[10px] text-muted-foreground">Yanlış</div>
             </div>
             <div className="glass rounded-xl p-3">
@@ -208,7 +253,9 @@ export default function WarmupPage() {
           {maxCombo >= 3 && (
             <div className="flex items-center justify-center gap-2">
               <Flame className="w-5 h-5 text-orange-400" />
-              <span className="text-sm text-orange-400">En uzun seri: {maxCombo}</span>
+              <span className="text-sm text-orange-400">
+                En uzun seri: {maxCombo}
+              </span>
             </div>
           )}
 
@@ -235,7 +282,10 @@ export default function WarmupPage() {
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-amber-950/30 to-background">
       {/* Top bar */}
       <div className="p-4 flex items-center justify-between">
-        <Link href="/" className="p-2 rounded-lg hover:bg-white/5 transition-colors">
+        <Link
+          href="/"
+          className="p-2 rounded-lg hover:bg-white/5 transition-colors"
+        >
           <Clock className="w-5 h-5 text-amber-400" />
         </Link>
         <div className="flex items-center gap-3">
@@ -247,7 +297,9 @@ export default function WarmupPage() {
               className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/20"
             >
               <Flame className="w-4 h-4 text-orange-400" />
-              <span className="text-sm font-bold text-orange-400">x{combo}</span>
+              <span className="text-sm font-bold text-orange-400">
+                x{combo}
+              </span>
             </motion.div>
           )}
           <div className="text-xs text-muted-foreground px-2 py-1 rounded-full glass">
@@ -256,7 +308,9 @@ export default function WarmupPage() {
         </div>
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg glass">
           <Zap className="w-3.5 h-3.5 text-amber-400" />
-          <span className="text-xs font-medium text-amber-400">{totalXp} XP</span>
+          <span className="text-xs font-medium text-amber-400">
+            {totalXp} XP
+          </span>
         </div>
       </div>
 
@@ -264,12 +318,22 @@ export default function WarmupPage() {
       <div className="px-4">
         <div className="h-2 rounded-full bg-secondary overflow-hidden">
           <div
-            className={cn("h-full rounded-full transition-all duration-100", globalPercent < 20 ? "progress-bar-danger" : "bg-gradient-to-r from-amber-500 to-orange-500")}
+            className={cn(
+              "h-full rounded-full transition-all duration-100",
+              globalPercent < 20
+                ? "progress-bar-danger"
+                : "bg-gradient-to-r from-amber-500 to-orange-500",
+            )}
             style={{ width: `${globalPercent}%` }}
           />
         </div>
         <div className="flex justify-between mt-1">
-          <span className={cn("text-[10px] font-mono", globalPercent < 20 ? "text-destructive" : "text-amber-400")}>
+          <span
+            className={cn(
+              "text-[10px] font-mono",
+              globalPercent < 20 ? "text-destructive" : "text-amber-400",
+            )}
+          >
             {formatMs(globalTimeLeft)}
           </span>
           <span className="text-[10px] text-muted-foreground">Isınma Modu</span>
@@ -287,7 +351,9 @@ export default function WarmupPage() {
             className="w-full max-w-xl space-y-6"
           >
             <div className="glass-strong rounded-2xl p-6">
-              <p className="text-lg font-medium leading-relaxed whitespace-pre-line">{q.content}</p>
+              <p className="text-lg font-medium leading-relaxed whitespace-pre-line">
+                {q.content}
+              </p>
             </div>
             <div className="grid grid-cols-1 gap-2.5">
               {q.options.map((option, i) => {
@@ -304,19 +370,36 @@ export default function WarmupPage() {
                     onClick={() => handleAnswer(option)}
                     className={cn(
                       "w-full flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all glass hover:bg-white/5 active:scale-[0.98]",
-                      answered && isCorrectOption && "!bg-success/20 !border-success/50",
-                      answered && isSelected && !isCorrectOption && "!bg-destructive/20 !border-destructive/50",
-                      answered && !isSelected && !isCorrectOption && "opacity-40"
+                      answered &&
+                        isCorrectOption &&
+                        "!bg-success/20 !border-success/50",
+                      answered &&
+                        isSelected &&
+                        !isCorrectOption &&
+                        "!bg-destructive/20 !border-destructive/50",
+                      answered &&
+                        !isSelected &&
+                        !isCorrectOption &&
+                        "opacity-40",
                     )}
                   >
-                    <span className={cn(
-                      "w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold flex-shrink-0 bg-white/5",
-                      answered && isCorrectOption && "!bg-success text-white",
-                      answered && isSelected && !isCorrectOption && "!bg-destructive text-white"
-                    )}>
-                      {answered && isCorrectOption ? <Check className="w-4 h-4" /> :
-                       answered && isSelected && !isCorrectOption ? <X className="w-4 h-4" /> :
-                       letter}
+                    <span
+                      className={cn(
+                        "w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold flex-shrink-0 bg-white/5",
+                        answered && isCorrectOption && "!bg-success text-white",
+                        answered &&
+                          isSelected &&
+                          !isCorrectOption &&
+                          "!bg-destructive text-white",
+                      )}
+                    >
+                      {answered && isCorrectOption ? (
+                        <Check className="w-4 h-4" />
+                      ) : answered && isSelected && !isCorrectOption ? (
+                        <X className="w-4 h-4" />
+                      ) : (
+                        letter
+                      )}
                     </span>
                     <span className="text-sm font-medium">{option}</span>
                   </motion.button>
@@ -329,7 +412,12 @@ export default function WarmupPage() {
         {/* Tactic */}
         <AnimatePresence>
           {answered && showTactic && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-4 w-full max-w-xl">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="mt-4 w-full max-w-xl"
+            >
               <div className="glass rounded-xl p-4 border border-amber-500/30">
                 <div className="flex items-start gap-2">
                   <Lightbulb className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
@@ -341,11 +429,19 @@ export default function WarmupPage() {
         </AnimatePresence>
 
         {answered && lastResult && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-3">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-3"
+          >
             {lastResult === "correct" ? (
-              <span className="text-sm font-semibold text-success flex items-center gap-1"><Check className="w-4 h-4" /> Doğru!</span>
+              <span className="text-sm font-semibold text-success flex items-center gap-1">
+                <Check className="w-4 h-4" /> Doğru!
+              </span>
             ) : (
-              <span className="text-sm font-semibold text-destructive flex items-center gap-1"><X className="w-4 h-4" /> Yanlış</span>
+              <span className="text-sm font-semibold text-destructive flex items-center gap-1">
+                <X className="w-4 h-4" /> Yanlış
+              </span>
             )}
           </motion.div>
         )}
@@ -364,7 +460,9 @@ export default function WarmupPage() {
 
       {!answered && (
         <div className="pb-4 text-center">
-          <p className="text-[10px] text-muted-foreground">Klavye: A, B, C, D veya 1, 2, 3, 4</p>
+          <p className="text-[10px] text-muted-foreground">
+            Klavye: A, B, C, D veya 1, 2, 3, 4
+          </p>
         </div>
       )}
     </div>

@@ -8,17 +8,26 @@ export const dynamic = "force-dynamic";
 // POST: Log an attempt
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { questionId, topicSlug, isCorrect, timeTakenMs, comboCount, xpEarned } = body;
-
-  // Log the attempt
-  db.insert(schema.attemptLogs).values({
+  const {
     questionId,
     topicSlug,
     isCorrect,
     timeTakenMs,
     comboCount,
     xpEarned,
-  }).run();
+  } = body;
+
+  // Log the attempt
+  db.insert(schema.attemptLogs)
+    .values({
+      questionId,
+      topicSlug,
+      isCorrect,
+      timeTakenMs,
+      comboCount,
+      xpEarned,
+    })
+    .run();
 
   // Update user XP and stats
   const user = db.select().from(schema.users).limit(1).get();

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Brain, Pencil, Target, Search, Zap, ScanSearch, Table2, Database,
-  Trophy, Flame, Star, ChevronRight, TrendingUp, Shield, Clock,
+  Flame, Star, ChevronRight, TrendingUp, Shield, Clock,
   BarChart3, Sparkles
 } from "lucide-react";
 import Link from "next/link";
@@ -59,7 +59,6 @@ export default function DashboardPage() {
   const mathTopics = topics.filter((t) => t.category === "math");
   const verbalTopics = topics.filter((t) => t.category === "verbal");
 
-  const getStatForTopic = (slug: string) => topicStats.find((s) => s.topicSlug === slug);
 
   if (!loaded) {
     return (
@@ -208,7 +207,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-destructive">Kırmızı Bölge — Zayıf Alanların</h3>
-                <p className="text-xs text-muted-foreground">Bu konularda doğruluk oranın %60'ın altında. Daha çok pratik yap!</p>
+                <p className="text-xs text-muted-foreground">Bu konularda doğruluk oranın %60&apos;ın altında. Daha çok pratik yap!</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
