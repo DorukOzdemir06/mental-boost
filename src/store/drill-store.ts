@@ -128,7 +128,10 @@ export const useDrillStore = create<DrillState>((set, get) => ({
     const q = state.currentQuestion;
     if (!q) return { isCorrect: false, earnedXp: 0, newCombo: 0 };
 
-    const isCorrect = answer === q.correctAnswer;
+    // Working memory correctAnswer may contain ";;" separator (e.g. "ans;;originalSeq")
+    // Extract just the answer portion for comparison
+    const actualCorrect = q.correctAnswer.includes(";;") ? q.correctAnswer.split(";;")[0] : q.correctAnswer;
+    const isCorrect = answer === actualCorrect;
     
     // ─── 85% Rule (Difficulty Adaptation) ───
     const newHistory = [...state.accuracyHistory, isCorrect];

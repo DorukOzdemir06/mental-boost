@@ -253,9 +253,16 @@ export default function DrillPage({
 
       const questions: Question[] = await qRes.json();
       const pb = await pbRes.json();
-      if (questions.length === 0) return;
+
+      // For generative topics, DB can return 0 questions — that's fine, generator will create them
+      const generativeTopics = ["mental-math", "pen-paper-math", "estimation", "pattern-recognition", "tachistoscope", "working-memory"];
+      if (questions.length === 0 && !generativeTopics.includes(slug)) return;
 
       useDrillStore.getState().startDrill(questions, slug, pb);
+
+      // Get the first question (may be generated)
+      const firstQ = useDrillStore.getState().currentQuestion;
+      if (!firstQ) return;
 
       // 3-2-1 countdown
       setCountdownNum(3);
@@ -268,7 +275,9 @@ export default function DrillPage({
       }, 2000);
       setTimeout(() => {
         if (cancelled) return;
-        showStimulusThenPlay(questions[0]);
+        // Re-read from store in case it changed
+        const q = useDrillStore.getState().currentQuestion;
+        if (q) showStimulusThenPlay(q);
       }, 3000);
     }
 
@@ -320,7 +329,8 @@ export default function DrillPage({
     const s = useDrillStore.getState();
     const nextIdx = s.questionIndex + 1;
 
-    if (nextIdx >= s.questions.length) {
+    // Use totalQuestions (SESSION_LENGTH) not questions.length (DB array may be empty for generative topics)
+    if (nextIdx >= s.totalQuestions) {
       const totalTimeMs = Date.now() - s.startTime;
       fetch("/api/personal-bests", {
         method: "POST",
@@ -374,11 +384,16 @@ export default function DrillPage({
       }
 
       useDrillStore.getState().startDrill(questions, slug, pb);
+      const firstQ = useDrillStore.getState().currentQuestion;
+      if (!firstQ) return;
       setCountdownNum(3);
       goTo("countdown");
       setTimeout(() => setCountdownNum(2), 1000);
       setTimeout(() => setCountdownNum(1), 2000);
-      setTimeout(() => showStimulusThenPlay(questions[0]), 3000);
+      setTimeout(() => {
+        const q = useDrillStore.getState().currentQuestion;
+        if (q) showStimulusThenPlay(q);
+      }, 3000);
       forceUpdate((n) => n + 1);
     })();
   }
@@ -742,7 +757,9 @@ export default function DrillPage({
             <div className="grid grid-cols-1 gap-2.5">
               {q.options.map((opt, i) => {
                 const letter = ["A", "B", "C", "D"][i];
-                const isRight = opt === q.correctAnswer;
+                // Working memory correctAnswer may contain ";;" separator — extract just the answer portion
+                const actualCorrect = q.correctAnswer.includes(";;") ? q.correctAnswer.split(";;")[0] : q.correctAnswer;
+                const isRight = opt === actualCorrect;
                 const isSel = selectedAnswer === opt;
                 return (
                   <motion.button

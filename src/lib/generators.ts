@@ -66,7 +66,7 @@ function generateMathQuestion(slug: string, diff: number): Question {
 
   // 3-step equations for pen-paper on high diff
   if (!isMental && diff >= 5 && (op === "+" || op === "-")) {
-    c = Math.floor(Math.random() * (diff * 10));
+    c = Math.floor(Math.random() * (diff * 10)) + 1;
     ans = op === "+" ? a + b - c : a - b + c;
     str = op === "+" ? `${a} + ${b} - ${c} = ?` : `${a} - ${b} + ${c} = ?`;
   }
@@ -74,16 +74,21 @@ function generateMathQuestion(slug: string, diff: number): Question {
   // Generate options (close to correct answer)
   const options = new Set<number>();
   options.add(ans);
-  while (options.size < 4) {
+  let safetyCounter = 0;
+  while (options.size < 4 && safetyCounter < 50) {
+    safetyCounter++;
     let variance = Math.floor(Math.random() * 10) + 1; // 1 to 10 diff
     // Sometimes vary by 10 to simulate calculation errors
     if (Math.random() > 0.5) variance = 10 * (Math.floor(Math.random() * 2) + 1);
     
     const badOpt = Math.random() > 0.5 ? ans + variance : ans - variance;
-    if (badOpt !== ans && badOpt > 0) options.add(badOpt);
+    if (badOpt !== ans) options.add(badOpt);
   }
+  // Fallback: fill remaining with simple offsets
+  let fill = 1;
+  while (options.size < 4) { options.add(ans + fill * 7); fill++; }
 
-  let timeMs = 15000 - (diff * 1000); // gets faster
+  let timeMs = Math.max(3000, 15000 - (diff * 1000)); // gets faster, min 3s
   if (isMental) timeMs = Math.max(3000, timeMs * 0.7); // Mental math requires faster reaction
 
   return {
@@ -136,7 +141,7 @@ function generateEstimationQuestion(slug: string, diff: number): Question {
     correctAnswer: ansStr,
     options: shuffle(Array.from(options)),
     difficulty: diff,
-    targetTimeMs: 12000 - diff * 800,
+    targetTimeMs: Math.max(4000, 12000 - diff * 800),
     tacticHint: "Küsüratları yuvarla. Zaman harcama!",
   };
 }
@@ -190,7 +195,11 @@ function generatePatternQuestion(slug: string, diff: number): Question {
   options.add(ans);
   while (options.size < 4) {
     const bad = ans + (Math.floor(Math.random() * 15) - 7);
-    if (bad !== ans && bad > 0) options.add(bad);
+    if (bad !== ans && bad >= 0) options.add(bad);
+    // Safety: prevent infinite loop if answer is very small
+    if (options.size < 4 && options.size === new Set([...options, bad]).size) {
+      options.add(ans + options.size * 3);
+    }
   }
 
   return {
@@ -283,7 +292,9 @@ function generateVerbalMnemonicQuestion(slug: string, diff: number): Question {
     // Options
     const options = new Set<string>();
     options.add(ansStr);
-    while (options.size < 4) {
+    let wmSafety = 0;
+    while (options.size < 4 && wmSafety < 50) {
+      wmSafety++;
       // Create slight mutations
       const mut = [...finalSeq];
       // swap two adjacent
@@ -291,6 +302,14 @@ function generateVerbalMnemonicQuestion(slug: string, diff: number): Question {
       [mut[idx], mut[idx+1]] = [mut[idx+1], mut[idx]];
       const badStr = mut.join("-");
       if (badStr !== ansStr) options.add(badStr);
+    }
+    // Fallback: replace last element with random
+    let wmFill = 1;
+    while (options.size < 4) {
+      const mut = [...finalSeq];
+      mut[mut.length - 1] = useDigits ? (Math.floor(Math.random()*90)+10) : WORD_BANK[wmFill % WORD_BANK.length];
+      options.add(mut.join("-"));
+      wmFill++;
     }
     
     // Original forward str to pass to UI to show as stimulus
