@@ -324,30 +324,27 @@ export default function DrillPage({
     forceUpdate((n) => n + 1);
   }
 
+  // ─── Handle End Drill ───────────────────────────────
+  function handleEnd() {
+    const s = useDrillStore.getState();
+    const totalTimeMs = Date.now() - s.startTime;
+    fetch("/api/personal-bests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topicSlug: slug,
+        bestTimeMs: totalTimeMs,
+        bestStreak: s.maxCombo,
+        bestScore: s.score,
+      }),
+    }).catch(() => {});
+    useDrillStore.getState().endDrill();
+    goTo("results");
+    forceUpdate((n) => n + 1);
+  }
+
   // ─── Handle Next ────────────────────────────────────
   function handleNext() {
-    const s = useDrillStore.getState();
-    const nextIdx = s.questionIndex + 1;
-
-    // Use totalQuestions (SESSION_LENGTH) not questions.length (DB array may be empty for generative topics)
-    if (nextIdx >= s.totalQuestions) {
-      const totalTimeMs = Date.now() - s.startTime;
-      fetch("/api/personal-bests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topicSlug: slug,
-          bestTimeMs: totalTimeMs,
-          bestStreak: s.maxCombo,
-          bestScore: s.score,
-        }),
-      }).catch(() => {});
-      useDrillStore.getState().endDrill();
-      goTo("results");
-      forceUpdate((n) => n + 1);
-      return;
-    }
-
     setSelectedAnswer(null);
     setShaking(false);
     useDrillStore.getState().clearAnimation();
@@ -647,6 +644,12 @@ export default function DrillPage({
           <ArrowLeft className="w-5 h-5 text-muted-foreground" />
         </Link>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleEnd}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors text-xs font-semibold"
+          >
+            Bitir
+          </button>
           <AnimatePresence>
             {store.combo >= 2 && (
               <motion.div
@@ -663,8 +666,8 @@ export default function DrillPage({
               </motion.div>
             )}
           </AnimatePresence>
-          <div className="text-xs text-muted-foreground px-2 py-1 rounded-full glass">
-            {store.questionIndex + 1}/{store.totalQuestions}
+          <div className="text-xs text-muted-foreground px-3 py-1.5 rounded-full glass font-medium">
+            Soru {store.questionIndex + 1}
           </div>
         </div>
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg glass">

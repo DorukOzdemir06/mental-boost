@@ -64,8 +64,8 @@ export interface DrillState {
   clearAnimation: () => void;
 }
 
-// How many questions per drill session?
-const SESSION_LENGTH = 10;
+// How many questions per drill session? Infinity for endless mode
+const SESSION_LENGTH = Infinity;
 
 export const useDrillStore = create<DrillState>((set, get) => ({
   isActive: false,
@@ -99,15 +99,29 @@ export const useDrillStore = create<DrillState>((set, get) => ({
       firstQ = questions[0];
     }
 
+    // Read from localStorage to persist difficulty across sessions
+    let initialDiff = 1;
+    let initialHist: boolean[] = [];
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(`mental-boost-progress-${topicSlug}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.currentDifficulty) initialDiff = parsed.currentDifficulty;
+          if (parsed.accuracyHistory) initialHist = parsed.accuracyHistory;
+        }
+      } catch(e) {}
+    }
+
     set({
       isActive: true,
       questions,
       currentQuestion: firstQ || null,
       questionIndex: 0,
-      totalQuestions: SESSION_LENGTH, // Even for DB topics, we cap at 10
+      totalQuestions: SESSION_LENGTH,
       topicSlug,
-      currentDifficulty: 1, // Reset adaptivity
-      accuracyHistory: [],
+      currentDifficulty: initialDiff, // Recovered adaptivity
+      accuracyHistory: initialHist,
       combo: 0,
       maxCombo: 0,
       score: 0,
@@ -175,6 +189,13 @@ export const useDrillStore = create<DrillState>((set, get) => ({
       accuracyHistory: newHistory,
       currentDifficulty: newDifficulty,
     });
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`mental-boost-progress-${state.topicSlug}`, JSON.stringify({
+        currentDifficulty: newDifficulty,
+        accuracyHistory: newHistory
+      }));
+    }
 
     return { isCorrect, earnedXp, newCombo };
   },
