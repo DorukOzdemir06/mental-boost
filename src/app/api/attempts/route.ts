@@ -32,12 +32,16 @@ export async function POST(request: NextRequest) {
   // Update user XP and stats
   const user = db.select().from(schema.users).limit(1).get();
   if (user) {
+    // Award 1 Streak Shield for every 25 combo
+    const shieldsToAward = comboCount > 0 && comboCount % 25 === 0 && isCorrect ? 1 : 0;
+    
     db.update(schema.users)
       .set({
         xp: user.xp + xpEarned,
         totalCorrect: user.totalCorrect + (isCorrect ? 1 : 0),
         totalAttempts: user.totalAttempts + 1,
         longestStreak: Math.max(user.longestStreak, comboCount),
+        streakShields: user.streakShields + shieldsToAward,
       })
       .where(eq(schema.users.id, user.id))
       .run();
@@ -93,6 +97,23 @@ export async function GET(request: NextRequest) {
       .filter((s) => s.accuracy < 0.6);
 
     return Response.json(weakTopics);
+  }
+
+  if (type === "recent-history") {
+    // Get last 30 attempts across all topics, ordered by time
+    const history = db
+      .select({
+        id: schema.attemptLogs.id,
+        isCorrect: schema.attemptLogs.isCorrect,
+        topicSlug: schema.attemptLogs.topicSlug,
+      })
+      .from(schema.attemptLogs)
+      .orderBy(sql`${schema.attemptLogs.createdAt} DESC`)
+      .limit(30)
+      .all();
+    
+    // Reverse to chronological order (oldest to newest)
+    return Response.json(history.reverse());
   }
 
   return Response.json({ error: "invalid type" }, { status: 400 });

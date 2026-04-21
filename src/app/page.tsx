@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { getXpProgress, cn } from "@/lib/utils";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   brain: Brain, pencil: Pencil, target: Target, search: Search,
@@ -34,6 +35,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null);
   const [topicStats, setTopicStats] = useState<TopicStat[]>([]);
   const [weakTopics, setWeakTopics] = useState<string[]>([]);
+  const [recentHistory, setRecentHistory] = useState<{id: number, isCorrect: boolean, topicSlug: string}[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -42,11 +44,13 @@ export default function DashboardPage() {
       fetch("/api/attempts?type=user").then((r) => r.json()),
       fetch("/api/attempts?type=topic-stats").then((r) => r.json()),
       fetch("/api/attempts?type=weakness").then((r) => r.json()),
-    ]).then(([t, u, s, w]) => {
+      fetch("/api/attempts?type=recent-history").then((r) => r.json()),
+    ]).then(([t, u, s, w, h]) => {
       setTopics(t);
       setUser(u);
       setTopicStats(s);
       setWeakTopics(w.map((x: { topicSlug: string }) => x.topicSlug));
+      setRecentHistory(h);
       setLoaded(true);
     });
   }, []);
@@ -58,6 +62,14 @@ export default function DashboardPage() {
 
   const mathTopics = topics.filter((t) => t.category === "math");
   const verbalTopics = topics.filter((t) => t.category === "verbal");
+
+  // Format Recharts data -> moving average or 1/0 for area chart
+  const chartData = recentHistory.map((h, i) => {
+    // We can do a rolling accuracy for smoothing
+    const last5 = recentHistory.slice(Math.max(0, i - 4), i + 1);
+    const avg = last5.reduce((acc, curr) => acc + (curr.isCorrect ? 100 : 0), 0) / last5.length;
+    return { name: i + 1, accuracy: avg };
+  });
 
 
   if (!loaded) {
@@ -224,6 +236,57 @@ export default function DashboardPage() {
                   </Link>
                 ) : null;
               })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ─── Progression Chart ────────────────────────── */}
+        {chartData.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="glass rounded-2xl p-6"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground/90 flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Son Performans Trendi
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">Son {chartData.length} sorunun hareketli ortalama doğruluğu</p>
+              </div>
+            </div>
+            <div className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorAccuracy" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="name" hide />
+                  <YAxis domain={[0, 100]} hide />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", borderRadius: "8px" }}
+                    itemStyle={{ color: "var(--primary)" }}
+                    formatter={(value: unknown) => {
+                      const num = typeof value === "number" ? value : Number(value);
+                      return [`%${Math.round(num || 0)}`, "Doğruluk"];
+                    }}
+                    labelFormatter={() => "Soru"}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="accuracy"
+                    stroke="var(--primary)"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#colorAccuracy)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </motion.div>
         )}
