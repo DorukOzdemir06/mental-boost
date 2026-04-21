@@ -5,12 +5,13 @@ import { motion } from "framer-motion";
 import {
   Brain, Pencil, Target, Search, Zap, ScanSearch, Table2, Database,
   Flame, Star, ChevronRight, TrendingUp, Shield, Clock,
-  BarChart3, Sparkles
+  BarChart3, Sparkles, Palette
 } from "lucide-react";
 import Link from "next/link";
 import { getXpProgress, cn } from "@/lib/utils";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { StatsPanel } from "@/components/stats-panel";
+import { SettingsPanel } from "@/components/settings-panel";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   brain: Brain, pencil: Pencil, target: Target, search: Search,
@@ -39,6 +40,7 @@ export default function DashboardPage() {
   const [recentHistory, setRecentHistory] = useState<{id: number, isCorrect: boolean, topicSlug: string}[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -99,14 +101,24 @@ export default function DashboardPage() {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 mb-6"
+            className="flex items-center justify-between mb-6"
           >
-            <div className="p-2.5 rounded-xl bg-primary/20 animate-pulse-glow">
-              <Brain className="w-7 h-7 text-primary" />
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-primary/20 animate-pulse-glow">
+                <Brain className="w-7 h-7 text-primary" />
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight">
+                Mental <span className="text-primary">Boost</span>
+              </h1>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              Mental <span className="text-primary">Boost</span>
-            </h1>
+
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2.5 rounded-xl glass hover:bg-white/10 transition-colors text-muted-foreground hover:text-primary"
+              title="Temalar ve Ayarlar"
+            >
+              <Palette className="w-5 h-5" />
+            </button>
           </motion.div>
 
           {/* Stats Bar */}
@@ -321,6 +333,11 @@ export default function DashboardPage() {
         onClose={() => setIsStatsOpen(false)}
         stats={topicStats}
         topics={topics}
+      />
+
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </main>
   );

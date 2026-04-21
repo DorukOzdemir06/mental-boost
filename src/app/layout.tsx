@@ -18,6 +18,8 @@ export const metadata: Metadata = {
     "KPSS Genel Yetenek için mental kapasite ve hız artırma uygulaması. Zayıf konuları tespit et, oyunlaştırılmış antrenmanlarla güçlen!",
 };
 
+import { ThemeProvider } from "@/components/theme-provider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -30,7 +32,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
