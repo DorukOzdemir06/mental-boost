@@ -126,7 +126,10 @@ export default function DrillPage({
   const startTimeRef = useRef(0);
   const targetMsRef = useRef(0);
   const slugRef = useRef(slug);
-  slugRef.current = slug;
+
+  useEffect(() => {
+    slugRef.current = slug;
+  }, [slug]);
 
   function goTo(p: Phase) {
     phaseRef.current = p;

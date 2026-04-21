@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run lint && next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint src/ --ext .ts,.tsx",
     "db:seed": "npx tsx src/db/seed.ts",
     "db:push": "npx drizzle-kit push"
   },
