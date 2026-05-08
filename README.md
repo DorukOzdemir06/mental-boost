@@ -1,6 +1,6 @@
 # Mental Boost
 
-Mental Boost is a Next.js web app built for KPSS General Ability prep, delivering speed and cognitive training through short, gamified drills. It combines adaptive difficulty, XP-based progression, and performance analytics to help users strengthen both numerical and verbal skills.
+Mental Boost is a Next.js web app built for General Ability prep, delivering speed and cognitive training through short, gamified drills. It combines adaptive difficulty, XP-based progression, and performance analytics to help users strengthen both numerical and verbal skills.
 
 ## Features
 - Adaptive drill sessions across math and verbal topics (mental math, estimation, pattern recognition, working memory, and more).
